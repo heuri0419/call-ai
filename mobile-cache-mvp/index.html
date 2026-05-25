@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mobile Cache MVP</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <div>
+          <h1>Mobile Cache MVP</h1>
+          <p id="providerLine">Supabase Edge Function</p>
+        </div>
+        <div class="top-actions">
+          <button id="exportButton" class="icon-button" type="button" title="导出">⇩</button>
+          <button id="resetButton" class="icon-button" type="button" title="重载空库">↻</button>
+        </div>
+      </header>
+
+      <section class="config-panel">
+        <details open>
+          <summary>service provider</summary>
+          <form id="profileForm" class="profile-form">
+            <label>
+              <span>Supabase URL</span>
+              <input id="supabaseUrlInput" type="url" autocomplete="off" placeholder="https://project-ref.supabase.co" />
+            </label>
+            <label>
+              <span>Supabase anon key</span>
+              <input id="supabaseAnonKeyInput" type="password" autocomplete="off" placeholder="留空保留已有 anon key" />
+            </label>
+            <label>
+              <span>Model</span>
+              <input id="modelInput" type="text" autocomplete="off" />
+            </label>
+            <label>
+              <span>Vector store</span>
+              <input id="vectorStoreInput" type="text" autocomplete="off" placeholder="暂时可以留空" />
+            </label>
+            <label>
+              <span>System prompt</span>
+              <textarea id="systemPromptInput" rows="4"></textarea>
+            </label>
+            <button id="saveProfileButton" type="submit">Save settings</button>
+            <p id="profileStatus">stored in this browser</p>
+          </form>
+        </details>
+      </section>
+
+      <section class="conversation-head">
+        <p class="eyebrow">content database</p>
+        <h2 id="conversationTitle">loading</h2>
+        <p id="statusLine">idle</p>
+      </section>
+
+      <section id="messageStack" class="message-stack" aria-label="messages"></section>
+
+      <form id="runForm" class="composer">
+        <textarea id="inputBox" rows="4" placeholder="输入 prompt。回复会通过 Supabase Edge Function 获取，然后写回本地内容库。"></textarea>
+        <button id="runButton" type="submit">Run</button>
+      </form>
+    </main>
+
+    <dialog id="editDialog">
+      <form method="dialog" class="edit-form">
+        <h3>编辑 prompt</h3>
+        <textarea id="editPromptInput" rows="8"></textarea>
+        <div class="dialog-actions">
+          <button id="cancelEditButton" value="cancel" type="submit">Cancel</button>
+          <button id="saveEditButton" value="default" type="button">Save version</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
