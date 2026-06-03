@@ -22,7 +22,11 @@ export function createEmptyConversation(contentDb, profile) {
     current_node: null,
     default_model_slug: profile.openai?.model || "gpt-4.1-mini",
     mapping: {},
-    metadata: { provider: "supabase-edge", adapter_version: "mobile-cache-mvp" },
+    metadata: {
+      provider: "supabase-edge",
+      model_provider: profile.model_provider || "openai",
+      adapter_version: "mobile-cache-mvp",
+    },
     source: { kind: "created_in_mobile_cache_mvp" },
   };
   contentDb.conversations[id] = conversation;

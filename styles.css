@@ -24,8 +24,42 @@ body {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
+}
+
+.model-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.auth-login {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.model-picker button {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  padding: 0 12px;
+}
+
+.auth-login button {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  padding: 11px 12px;
+}
+
+.model-select {
+  margin-top: 6px;
 }
 
 .app {
@@ -136,6 +170,7 @@ label span {
 }
 
 input,
+select,
 textarea {
   width: 100%;
   border: 1px solid var(--line);
@@ -262,5 +297,13 @@ dialog::backdrop {
 
   #runButton {
     width: 100%;
+  }
+
+  .model-picker {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-login {
+    grid-template-columns: 1fr;
   }
 }

@@ -14,13 +14,16 @@ export const seedUserDb = {
       id: "local-profile",
       display_name: "Local Phone User",
       provider: "supabase-edge",
+      model_provider: "openai",
       supabase: {
         url: "",
         anon_key: "",
+        jwt: "",
       },
       openai: {
         model: "gpt-4.1-mini",
-        vector_store_id: "",
+        vector_store_aliases: [],
+        active_vector_store_alias: "",
       },
       script: {
         id: "mobile-context-reply",

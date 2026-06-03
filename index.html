@@ -32,12 +32,52 @@
               <input id="supabaseAnonKeyInput" type="password" autocomplete="off" placeholder="Leave empty to keep existing key" />
             </label>
             <label>
-              <span>Model</span>
-              <input id="modelInput" type="text" autocomplete="off" />
+              <span>Supabase user JWT</span>
+              <input id="supabaseJwtInput" type="password" autocomplete="off" placeholder="Optional, leave empty to keep existing JWT" />
+            </label>
+            <div class="auth-login">
+              <label>
+                <span>Supabase email</span>
+                <input id="supabaseEmailInput" type="email" autocomplete="username" placeholder="Optional login email" />
+              </label>
+              <label>
+                <span>Supabase password</span>
+                <input id="supabasePasswordInput" type="password" autocomplete="current-password" placeholder="Only used to request a JWT" />
+              </label>
+              <button id="supabaseLoginButton" type="button">Log in for JWT</button>
+            </div>
+            <label>
+              <span>Model provider</span>
+              <select id="modelProviderSelect" class="model-select" aria-label="Model provider">
+                <option value="openai">OpenAI</option>
+                <option value="grok">Grok</option>
+              </select>
             </label>
             <label>
-              <span>Vector store</span>
-              <input id="vectorStoreInput" type="text" autocomplete="off" placeholder="Optional" />
+              <span>Model</span>
+              <div class="model-picker">
+                <input id="modelInput" type="text" autocomplete="off" list="modelList" />
+                <button id="loadModelsButton" type="button">Load models</button>
+              </div>
+              <datalist id="modelList"></datalist>
+              <select id="modelFilterSelect" class="model-select" aria-label="Model list filter">
+                <option value="text">Text + fine-tuned</option>
+                <option value="fine-tuned">Fine-tuned only</option>
+                <option value="all">All models</option>
+              </select>
+              <select id="modelSelect" class="model-select" aria-label="Available models">
+                <option value="">Select a loaded model</option>
+              </select>
+            </label>
+            <label>
+              <span>Vector store aliases</span>
+              <input id="vectorStoreAliasesInput" type="text" autocomplete="off" placeholder="Optional, comma separated aliases" />
+            </label>
+            <label>
+              <span>Use vector store</span>
+              <select id="activeVectorStoreSelect">
+                <option value="">None</option>
+              </select>
             </label>
             <label>
               <span>System prompt</span>

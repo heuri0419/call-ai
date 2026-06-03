@@ -8,8 +8,18 @@ export function getElements() {
     profileForm: document.querySelector("#profileForm"),
     supabaseUrlInput: document.querySelector("#supabaseUrlInput"),
     supabaseAnonKeyInput: document.querySelector("#supabaseAnonKeyInput"),
+    supabaseJwtInput: document.querySelector("#supabaseJwtInput"),
+    supabaseEmailInput: document.querySelector("#supabaseEmailInput"),
+    supabasePasswordInput: document.querySelector("#supabasePasswordInput"),
+    supabaseLoginButton: document.querySelector("#supabaseLoginButton"),
+    modelProviderSelect: document.querySelector("#modelProviderSelect"),
     modelInput: document.querySelector("#modelInput"),
-    vectorStoreInput: document.querySelector("#vectorStoreInput"),
+    modelList: document.querySelector("#modelList"),
+    modelSelect: document.querySelector("#modelSelect"),
+    modelFilterSelect: document.querySelector("#modelFilterSelect"),
+    loadModelsButton: document.querySelector("#loadModelsButton"),
+    vectorStoreAliasesInput: document.querySelector("#vectorStoreAliasesInput"),
+    activeVectorStoreSelect: document.querySelector("#activeVectorStoreSelect"),
     systemPromptInput: document.querySelector("#systemPromptInput"),
     profileStatus: document.querySelector("#profileStatus"),
     conversationTitle: document.querySelector("#conversationTitle"),
@@ -27,19 +37,76 @@ export function getElements() {
 export function renderApp(els, { profile, conversation, onEditPrompt, onSwitchPromptVersion }) {
   const supabase = profile.supabase || {};
   const openai = profile.openai || {};
+  const modelProvider = profile.model_provider || "openai";
   els.providerLine.textContent = [
     profile.provider || "supabase-edge",
+    modelProvider,
     supabase.url ? "url set" : "no url",
     supabase.anon_key ? "anon key set" : "no anon key",
+    supabase.jwt ? "jwt set" : "no jwt",
     openai.model || "no model",
+    activeVectorStoreAlias(openai) || "no vector",
   ].join(" / ");
 
   els.supabaseUrlInput.value = supabase.url || "";
+  els.modelProviderSelect.value = modelProvider;
   els.modelInput.value = openai.model || "";
-  els.vectorStoreInput.value = openai.vector_store_id || "";
+  renderVectorStoreSelect(els, openai);
+  setVectorStoreDisabled(els, modelProvider !== "openai");
   els.systemPromptInput.value = profile.script?.system_prompt || "";
   els.conversationTitle.textContent = conversation?.title || "Empty content database";
   renderMessages(els, conversation, { onEditPrompt, onSwitchPromptVersion });
+}
+
+function setVectorStoreDisabled(els, disabled) {
+  els.vectorStoreAliasesInput.disabled = disabled;
+  els.activeVectorStoreSelect.disabled = disabled;
+}
+
+export function renderModelChoices(els, models, filter = "text") {
+  const visibleModels = filterModels(models, filter);
+  const modelIds = visibleModels.map((model) => model.id).filter(Boolean);
+  els.modelList.replaceChildren(...modelIds.map((id) => new Option(id, id)));
+  els.modelSelect.replaceChildren(new Option("Select a loaded model", ""));
+  for (const model of visibleModels) {
+    const ownedBy = model.owned_by ? ` / ${model.owned_by}` : "";
+    const label = `${model.id} [${model.category || "model"}${ownedBy}]`;
+    els.modelSelect.append(new Option(label, model.id));
+  }
+  els.modelSelect.value = modelIds.includes(els.modelInput.value) ? els.modelInput.value : "";
+}
+
+function filterModels(models, filter) {
+  if (filter === "fine-tuned") return models.filter((model) => model.is_fine_tuned);
+  if (filter === "all") return models;
+  return models.filter((model) => model.is_text_candidate);
+}
+
+export function vectorStoreAliases(openai) {
+  if (Array.isArray(openai.vector_store_aliases)) return openai.vector_store_aliases;
+  if (Array.isArray(openai.vector_store_names)) return openai.vector_store_names;
+  if (typeof openai.vector_store_name === "string" && openai.vector_store_name.trim()) {
+    return [openai.vector_store_name.trim()];
+  }
+  return [];
+}
+
+export function activeVectorStoreAlias(openai) {
+  if (typeof openai.active_vector_store_alias === "string") return openai.active_vector_store_alias.trim();
+  if (typeof openai.active_vector_store_name === "string") return openai.active_vector_store_name.trim();
+  const aliases = vectorStoreAliases(openai);
+  return aliases.length === 1 ? aliases[0] : "";
+}
+
+function renderVectorStoreSelect(els, openai) {
+  const aliases = vectorStoreAliases(openai);
+  const active = activeVectorStoreAlias(openai);
+  els.vectorStoreAliasesInput.value = aliases.join(", ");
+  els.activeVectorStoreSelect.replaceChildren(new Option("None", ""));
+  for (const alias of aliases) {
+    els.activeVectorStoreSelect.append(new Option(alias, alias));
+  }
+  els.activeVectorStoreSelect.value = aliases.includes(active) ? active : "";
 }
 
 export function renderMessages(els, conversation, handlers) {

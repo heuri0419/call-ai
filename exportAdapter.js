@@ -15,6 +15,7 @@ function maskUserDb(value) {
   const copy = structuredCopy(value);
   for (const profile of Object.values(copy.profiles || {})) {
     if (profile.supabase?.anon_key) profile.supabase.anon_key = "[redacted]";
+    if (profile.supabase?.jwt) profile.supabase.jwt = "[redacted]";
   }
   return copy;
 }

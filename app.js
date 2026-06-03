@@ -1,6 +1,6 @@
 import { createBrowserStorageAdapter } from "./browserStorageAdapter.js";
-import { callRunScriptFunction } from "./edgeFunctionClient.js";
 import { exportDatabases } from "./exportAdapter.js";
+import { createProviderClient } from "./providerClient.js";
 import {
   activeProfile,
   appendNode,
@@ -13,7 +13,7 @@ import {
   switchPromptVersion,
   touchContentDb,
 } from "./chatDomain.js";
-import { getElements, openPromptEditor, renderApp, setStatus } from "./ui.js";
+import { activeVectorStoreAlias, getElements, openPromptEditor, renderApp, renderModelChoices, setStatus } from "./ui.js";
 
 const storage = createBrowserStorageAdapter();
 const els = getElements();
@@ -21,8 +21,15 @@ const els = getElements();
 let { contentDb, userDb } = storage.load();
 let activeConversationId = firstConversationId(contentDb);
 let editingNodeId = null;
+let loadedModels = [];
 
 els.profileForm.addEventListener("submit", saveProfile);
+els.supabaseLoginButton.addEventListener("click", loginWithSupabasePassword);
+els.modelProviderSelect.addEventListener("change", handleModelProviderChange);
+els.vectorStoreAliasesInput.addEventListener("input", refreshVectorStoreChoices);
+els.loadModelsButton.addEventListener("click", loadModelChoices);
+els.modelFilterSelect.addEventListener("change", refreshModelChoices);
+els.modelSelect.addEventListener("change", applySelectedModel);
 els.runForm.addEventListener("submit", runScript);
 els.exportButton.addEventListener("click", () => {
   exportDatabases({ contentDb, userDb });
@@ -87,6 +94,7 @@ async function runScript(event) {
   const profile = activeProfile(userDb);
   const supabase = profile.supabase || {};
   const openai = profile.openai || {};
+  const modelProvider = activeModelProvider(profile);
   if (!supabase.url) return setStatus(els, "missing Supabase URL");
   if (!supabase.anon_key) return setStatus(els, "missing Supabase anon key");
   if (!openai.model) return setStatus(els, "missing model");
@@ -101,11 +109,11 @@ async function runScript(event) {
   els.runButton.disabled = true;
   setStatus(els, "calling Supabase Edge Function");
   try {
-    const output = await callRunScriptFunction({
-      supabaseUrl: supabase.url,
-      anonKey: supabase.anon_key,
+    const provider = createProviderClient(profile);
+    const output = await provider.runScript({
+      provider: modelProvider,
       model: openai.model,
-      vectorStoreId: openai.vector_store_id || "",
+      vectorStoreNames: selectedVectorStoreNames(profile),
       systemPrompt: profile.script?.system_prompt || "",
       context: buildContext(conversation, profile.script?.context_node_limit || 6),
       input,
@@ -124,6 +132,36 @@ async function runScript(event) {
   }
 }
 
+async function loadModelChoices() {
+  const profile = activeProfile(userDb);
+  const supabase = profile.supabase || {};
+  const modelProvider = activeModelProvider(profile);
+  if (!supabase.url) return setStatus(els, "missing Supabase URL");
+  if (!supabase.anon_key) return setStatus(els, "missing Supabase anon key");
+
+  els.loadModelsButton.disabled = true;
+  setStatus(els, `loading ${modelProvider} models`);
+  try {
+    const provider = createProviderClient(profile);
+    loadedModels = await provider.listModels({ provider: modelProvider });
+    refreshModelChoices();
+    setStatus(els, loadedModels.length ? `loaded ${loadedModels.length} models` : "no models returned");
+  } catch (error) {
+    setStatus(els, `model list failed: ${error.message}`);
+  } finally {
+    els.loadModelsButton.disabled = false;
+  }
+}
+
+function refreshModelChoices() {
+  renderModelChoices(els, loadedModels, els.modelFilterSelect.value);
+}
+
+function applySelectedModel() {
+  if (!els.modelSelect.value) return;
+  els.modelInput.value = els.modelSelect.value;
+}
+
 function createConversation(profile) {
   const conversation = createEmptyConversation(contentDb, profile);
   activeConversationId = conversation.id;
@@ -138,17 +176,99 @@ function saveProfile(event) {
   profile.openai ||= {};
 
   const anonKey = els.supabaseAnonKeyInput.value.trim();
+  const jwt = els.supabaseJwtInput.value.trim();
   profile.supabase.url = els.supabaseUrlInput.value.trim();
   if (anonKey) profile.supabase.anon_key = anonKey;
+  if (jwt) profile.supabase.jwt = jwt;
+  profile.model_provider = normalizedModelProvider(els.modelProviderSelect.value);
   profile.openai.model = els.modelInput.value.trim();
-  profile.openai.vector_store_id = els.vectorStoreInput.value.trim();
+  profile.openai.vector_store_aliases = parseVectorStoreAliases(els.vectorStoreAliasesInput.value);
+  profile.openai.active_vector_store_alias = profile.openai.vector_store_aliases.includes(els.activeVectorStoreSelect.value)
+    ? els.activeVectorStoreSelect.value
+    : "";
+  delete profile.openai.vector_store_id;
+  delete profile.openai.vector_store_name;
+  delete profile.openai.vector_store_names;
+  delete profile.openai.active_vector_store_name;
   profile.script ||= {};
   profile.script.system_prompt = els.systemPromptInput.value.trim();
   userDb.updated_at = new Date().toISOString();
   persist();
   els.supabaseAnonKeyInput.value = "";
+  els.supabaseJwtInput.value = "";
+  els.supabasePasswordInput.value = "";
   els.profileStatus.textContent = "saved in browser storage";
   render();
+}
+
+async function loginWithSupabasePassword() {
+  const profile = activeProfile(userDb);
+  profile.supabase ||= {};
+
+  const supabaseUrl = els.supabaseUrlInput.value.trim() || profile.supabase.url || "";
+  const anonKey = els.supabaseAnonKeyInput.value.trim() || profile.supabase.anon_key || "";
+  const email = els.supabaseEmailInput.value.trim();
+  const password = els.supabasePasswordInput.value;
+
+  if (!supabaseUrl) return setStatus(els, "missing Supabase URL");
+  if (!anonKey) return setStatus(els, "missing Supabase anon key");
+  if (!email) return setStatus(els, "missing Supabase email");
+  if (!password) return setStatus(els, "missing Supabase password");
+
+  els.supabaseLoginButton.disabled = true;
+  setStatus(els, "requesting Supabase user JWT");
+  try {
+    const session = await requestSupabasePasswordSession({ supabaseUrl, anonKey, email, password });
+    if (!session.access_token) throw new Error("Supabase did not return an access token.");
+
+    profile.supabase.url = supabaseUrl;
+    profile.supabase.anon_key = anonKey;
+    profile.supabase.jwt = session.access_token;
+    userDb.updated_at = new Date().toISOString();
+    persist();
+
+    els.supabasePasswordInput.value = "";
+    els.supabaseJwtInput.value = "";
+    els.profileStatus.textContent = session.user?.email ? `logged in as ${session.user.email}` : "JWT saved";
+    render();
+    setStatus(els, "Supabase JWT saved");
+  } catch (error) {
+    setStatus(els, `login failed: ${error.message}`);
+  } finally {
+    els.supabaseLoginButton.disabled = false;
+  }
+}
+
+async function requestSupabasePasswordSession({ supabaseUrl, anonKey, email, password }) {
+  const baseUrl = supabaseUrl.replace(/\/+$/, "");
+  const response = await fetch(`${baseUrl}/auth/v1/token?grant_type=password`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${anonKey}`,
+      apikey: anonKey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ email, password }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.error) {
+    const message = typeof data.error === "string"
+      ? data.error
+      : data.error_description || data.msg || data.message || `HTTP ${response.status}`;
+    throw new Error(message);
+  }
+  return data;
+}
+
+function refreshVectorStoreChoices() {
+  const currentValue = els.activeVectorStoreSelect.value;
+  const aliases = parseVectorStoreAliases(els.vectorStoreAliasesInput.value);
+  els.activeVectorStoreSelect.replaceChildren(new Option("None", ""));
+  for (const alias of aliases) {
+    els.activeVectorStoreSelect.append(new Option(alias, alias));
+  }
+  els.activeVectorStoreSelect.value = aliases.includes(currentValue) ? currentValue : "";
 }
 
 function resetLocalDatabases() {
@@ -157,4 +277,34 @@ function resetLocalDatabases() {
   activeConversationId = firstConversationId(contentDb);
   render();
   setStatus(els, "empty database reloaded");
+}
+
+function handleModelProviderChange() {
+  const profile = activeProfile(userDb);
+  profile.model_provider = normalizedModelProvider(els.modelProviderSelect.value);
+  loadedModels = [];
+  refreshModelChoices();
+  render();
+}
+
+function selectedVectorStoreNames(profile) {
+  if (activeModelProvider(profile) !== "openai") return [];
+  const openai = profile.openai || {};
+  const alias = activeVectorStoreAlias(openai);
+  return alias ? [alias] : [];
+}
+
+function activeModelProvider(profile) {
+  return normalizedModelProvider(profile.model_provider);
+}
+
+function normalizedModelProvider(value) {
+  return value === "grok" ? "grok" : "openai";
+}
+
+function parseVectorStoreAliases(value) {
+  return value
+    .split(/[\n,]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
