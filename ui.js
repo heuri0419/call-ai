@@ -219,7 +219,13 @@ export function setStatus(els, message) {
 
 export function openPromptEditor(els, text) {
   els.editPromptInput.value = text;
-  els.editDialog.showModal();
+  try {
+    if (typeof els.editDialog.showModal === "function") els.editDialog.showModal();
+    else els.editDialog.setAttribute("open", "");
+  } catch {
+    els.editDialog.setAttribute("open", "");
+  }
+  els.editDialog.classList.add("dialog-visible");
 }
 
 function renderMessage(conversation, node, handlers) {

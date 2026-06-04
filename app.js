@@ -42,9 +42,9 @@ els.sidebarRefreshButton.addEventListener("click", refreshConversationList);
 els.newConversationButton.addEventListener("click", createConversationFromButton);
 els.settingsButton.addEventListener("click", openSettings);
 els.compactSettingsButton.addEventListener("click", openSettings);
-els.closeSettingsButton.addEventListener("click", () => els.settingsDialog.close());
+els.closeSettingsButton.addEventListener("click", () => closeDialog(els.settingsDialog));
 els.chatSettingsButton.addEventListener("click", openChatSettings);
-els.closeChatSettingsButton.addEventListener("click", () => els.chatSettingsDialog.close());
+els.closeChatSettingsButton.addEventListener("click", () => closeDialog(els.chatSettingsDialog));
 els.chatSettingsForm.addEventListener("submit", saveChatSettings);
 els.profileForm.addEventListener("submit", saveProfile);
 els.supabaseLoginButton.addEventListener("click", loginWithSupabasePassword);
@@ -114,7 +114,7 @@ function savePromptVersion() {
   if (!node) return;
   touchContentDb(contentDb, conversation);
   persist();
-  els.editDialog.close();
+  closeDialog(els.editDialog);
   render();
   setStatus(els, "prompt version saved");
 }
@@ -302,17 +302,17 @@ function refreshConversationList() {
 }
 
 function openSettings() {
-  els.settingsDialog.showModal();
+  openDialog(els.settingsDialog);
 }
 
 function openChatSettings() {
-  els.chatSettingsDialog.showModal();
+  openDialog(els.chatSettingsDialog);
 }
 
 function saveChatSettings(event) {
   event.preventDefault();
   saveActiveConversationSettings();
-  els.chatSettingsDialog.close();
+  closeDialog(els.chatSettingsDialog);
   setStatus(els, "chat settings saved");
 }
 
@@ -348,7 +348,7 @@ function saveProfile(event) {
   els.supabaseJwtInput.value = "";
   els.supabasePasswordInput.value = "";
   els.profileStatus.textContent = "saved in browser storage";
-  els.settingsDialog.close();
+  closeDialog(els.settingsDialog);
   render();
 }
 
@@ -478,4 +478,26 @@ function parseVectorStoreAliases(value) {
     .split(/[\n,]+/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function openDialog(dialog) {
+  if (!dialog) return;
+  try {
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+  } catch {
+    dialog.setAttribute("open", "");
+  }
+  dialog.classList.add("dialog-visible");
+}
+
+function closeDialog(dialog) {
+  if (!dialog) return;
+  try {
+    if (typeof dialog.close === "function") dialog.close();
+    else dialog.removeAttribute("open");
+  } catch {
+    dialog.removeAttribute("open");
+  }
+  dialog.classList.remove("dialog-visible");
 }

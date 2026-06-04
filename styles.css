@@ -346,15 +346,22 @@ textarea {
 }
 
 .message {
+  align-self: flex-start;
+  width: fit-content;
+  max-width: min(82%, 720px);
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
-  box-shadow: var(--shadow);
   padding: 13px;
 }
 
 .message.user {
+  align-self: flex-end;
   background: var(--accent-soft);
+}
+
+.message.user .message-meta {
+  text-align: right;
 }
 
 .message-meta {
@@ -405,7 +412,17 @@ dialog {
   width: min(92vw, 560px);
   border: 1px solid var(--line);
   border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
   box-shadow: var(--shadow);
+}
+
+.dialog-visible[open] {
+  position: fixed;
+  inset: 50% auto auto 50%;
+  z-index: 1000;
+  margin: 0;
+  transform: translate(-50%, -50%);
 }
 
 .settings-dialog {
@@ -498,7 +515,6 @@ dialog::backdrop {
     justify-content: flex-end;
   }
 
-  #compactSettingsButton,
   #exportButton,
   #resetButton {
     display: none;
@@ -510,6 +526,10 @@ dialog::backdrop {
 
   .composer {
     grid-template-columns: 1fr;
+  }
+
+  .message {
+    max-width: 92%;
   }
 
   #runButton {
