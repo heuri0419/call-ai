@@ -2,6 +2,11 @@ import { contentToText, currentPath, promptVersions } from "./chatDomain.js";
 
 export function getElements() {
   return {
+    appShell: document.querySelector("#appShell"),
+    sidebarToggleButton: document.querySelector("#sidebarToggleButton"),
+    sidebarRefreshButton: document.querySelector("#sidebarRefreshButton"),
+    newConversationButton: document.querySelector("#newConversationButton"),
+    conversationList: document.querySelector("#conversationList"),
     providerLine: document.querySelector("#providerLine"),
     exportButton: document.querySelector("#exportButton"),
     resetButton: document.querySelector("#resetButton"),
@@ -34,10 +39,26 @@ export function getElements() {
   };
 }
 
-export function renderApp(els, { profile, conversation, onEditPrompt, onSwitchPromptVersion }) {
+export function renderApp(
+  els,
+  {
+    profile,
+    conversation,
+    conversations,
+    activeConversationId,
+    isSidebarOpen,
+    onSelectConversation,
+    onNewConversation,
+    onEditPrompt,
+    onSwitchPromptVersion,
+  },
+) {
   const supabase = profile.supabase || {};
   const openai = profile.openai || {};
   const modelProvider = profile.model_provider || "openai";
+  els.appShell.classList.toggle("sidebar-closed", !isSidebarOpen);
+  els.sidebarToggleButton.textContent = isSidebarOpen ? "Hide chats" : "Chats";
+  els.sidebarToggleButton.setAttribute("aria-expanded", String(isSidebarOpen));
   els.providerLine.textContent = [
     profile.provider || "supabase-edge",
     modelProvider,
@@ -55,7 +76,48 @@ export function renderApp(els, { profile, conversation, onEditPrompt, onSwitchPr
   setVectorStoreDisabled(els, modelProvider !== "openai");
   els.systemPromptInput.value = profile.script?.system_prompt || "";
   els.conversationTitle.textContent = conversation?.title || "Empty content database";
+  renderConversationList(els, conversations, activeConversationId, { onSelectConversation, onNewConversation });
   renderMessages(els, conversation, { onEditPrompt, onSwitchPromptVersion });
+}
+
+function renderConversationList(els, conversations, activeConversationId, handlers) {
+  els.conversationList.replaceChildren();
+  if (!conversations.length) {
+    const empty = document.createElement("li");
+    empty.className = "conversation-empty";
+    empty.textContent = "No cached conversations";
+    els.conversationList.append(empty);
+    return;
+  }
+
+  for (const conversation of conversations) {
+    const item = document.createElement("li");
+    const button = document.createElement("button");
+    button.className = "conversation-button";
+    button.type = "button";
+    button.setAttribute("aria-current", conversation.id === activeConversationId ? "true" : "false");
+    button.addEventListener("click", () => handlers.onSelectConversation(conversation.id));
+
+    const title = document.createElement("span");
+    title.className = "conversation-title";
+    title.textContent = conversation.title || "New conversation";
+
+    const meta = document.createElement("span");
+    meta.className = "conversation-meta";
+    meta.textContent = [
+      conversation.model_provider || "provider?",
+      conversation.default_model_slug || "model?",
+      `${conversation.message_count || 0} msg`,
+    ].join(" / ");
+
+    const preview = document.createElement("span");
+    preview.className = "conversation-preview";
+    preview.textContent = conversation.preview_text || "Cached locally";
+
+    button.append(title, meta, preview);
+    item.append(button);
+    els.conversationList.append(item);
+  }
 }
 
 function setVectorStoreDisabled(els, disabled) {

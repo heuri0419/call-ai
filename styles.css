@@ -62,12 +62,103 @@ textarea {
   margin-top: 6px;
 }
 
+.app-shell {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 860px);
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.app-shell.sidebar-closed {
+  grid-template-columns: minmax(0, 860px);
+}
+
+.app-shell.sidebar-closed .conversation-sidebar {
+  display: none;
+}
+
+.conversation-sidebar {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 12px;
+  min-height: 100vh;
+  border-right: 1px solid var(--line);
+  background: #eef2ea;
+  padding: 14px;
+}
+
+.sidebar-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sidebar-head h2 {
+  font-size: 18px;
+}
+
+.new-chat-button {
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: white;
+  padding: 11px 14px;
+  text-align: center;
+}
+
+.conversation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  margin: 0;
+  overflow: auto;
+  padding: 0;
+  list-style: none;
+}
+
+.conversation-button {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  padding: 10px;
+  text-align: left;
+}
+
+.conversation-button[aria-current="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.conversation-title,
+.conversation-meta,
+.conversation-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-title {
+  font-weight: 700;
+}
+
+.conversation-meta,
+.conversation-preview,
+.conversation-empty {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .app {
   display: grid;
   grid-template-rows: auto auto auto minmax(0, 1fr) auto;
-  width: min(100%, 860px);
+  width: min(100vw, 860px);
   min-height: 100vh;
-  margin: 0 auto;
 }
 
 .topbar,
@@ -129,6 +220,13 @@ h2 {
   border-radius: 8px;
   background: var(--surface);
   color: var(--ink);
+}
+
+#sidebarToggleButton,
+#sidebarRefreshButton {
+  width: auto;
+  min-width: 38px;
+  padding: 0 12px;
 }
 
 .prompt-icon:disabled {
@@ -291,6 +389,22 @@ dialog::backdrop {
 }
 
 @media (max-width: 620px) {
+  .app-shell,
+  .app-shell.sidebar-closed {
+    grid-template-columns: 1fr;
+  }
+
+  .conversation-sidebar {
+    min-height: auto;
+    max-height: 42vh;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .app-shell.sidebar-closed .conversation-sidebar {
+    display: none;
+  }
+
   .composer {
     grid-template-columns: 1fr;
   }

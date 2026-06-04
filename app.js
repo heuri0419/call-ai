@@ -5,12 +5,15 @@ import {
   activeProfile,
   appendNode,
   buildContext,
+  conversationIndex,
   contentToText,
   createEmptyConversation,
   createPromptVersion,
   firstConversationId,
   getActiveConversation,
+  syncConversationSettings,
   switchPromptVersion,
+  titleFromInput,
   touchContentDb,
 } from "./chatDomain.js";
 import { activeVectorStoreAlias, getElements, openPromptEditor, renderApp, renderModelChoices, setStatus } from "./ui.js";
@@ -18,11 +21,19 @@ import { activeVectorStoreAlias, getElements, openPromptEditor, renderApp, rende
 const storage = createBrowserStorageAdapter();
 const els = getElements();
 
-let { contentDb, userDb } = storage.load();
-let activeConversationId = firstConversationId(contentDb);
+let { contentDb, userDb, session } = storage.load();
+let activeConversationId = session.active_conversation_id || firstConversationId(contentDb);
 let editingNodeId = null;
 let loadedModels = [];
+let isSidebarOpen = session.is_sidebar_open !== false;
 
+if (!getActiveConversation(contentDb, activeConversationId)) {
+  activeConversationId = firstConversationId(contentDb);
+}
+
+els.sidebarToggleButton.addEventListener("click", toggleSidebar);
+els.sidebarRefreshButton.addEventListener("click", refreshConversationList);
+els.newConversationButton.addEventListener("click", createConversationFromButton);
 els.profileForm.addEventListener("submit", saveProfile);
 els.supabaseLoginButton.addEventListener("click", loginWithSupabasePassword);
 els.modelProviderSelect.addEventListener("change", handleModelProviderChange);
@@ -46,6 +57,11 @@ function render() {
   renderApp(els, {
     profile: activeProfile(userDb),
     conversation: activeConversation(),
+    conversations: conversationIndex(contentDb),
+    activeConversationId,
+    isSidebarOpen,
+    onSelectConversation: selectConversation,
+    onNewConversation: createConversationFromButton,
     onEditPrompt: handleEditPrompt,
     onSwitchPromptVersion: handleSwitchPromptVersion,
   });
@@ -57,6 +73,14 @@ function activeConversation() {
 
 function persist() {
   storage.save({ contentDb, userDb });
+  persistSession();
+}
+
+function persistSession() {
+  storage.saveSession({
+    active_conversation_id: activeConversationId || "",
+    is_sidebar_open: isSidebarOpen,
+  });
 }
 
 function handleEditPrompt(nodeId) {
@@ -100,6 +124,8 @@ async function runScript(event) {
   if (!openai.model) return setStatus(els, "missing model");
 
   const conversation = activeConversation() || createConversation(profile);
+  syncConversationSettings(conversation, profile);
+  if (!conversation.current_node) conversation.title = titleFromInput(input);
   const userNode = appendNode(conversation, "user", input, null);
   conversation.current_node = userNode.id;
   touchContentDb(contentDb, conversation);
@@ -165,7 +191,37 @@ function applySelectedModel() {
 function createConversation(profile) {
   const conversation = createEmptyConversation(contentDb, profile);
   activeConversationId = conversation.id;
+  persistSession();
   return conversation;
+}
+
+function createConversationFromButton() {
+  const conversation = createConversation(activeProfile(userDb));
+  touchContentDb(contentDb, conversation);
+  persist();
+  render();
+  setStatus(els, "new conversation ready");
+}
+
+function selectConversation(conversationId) {
+  if (!contentDb.conversations?.[conversationId]) return;
+  activeConversationId = conversationId;
+  persistSession();
+  render();
+  setStatus(els, "conversation selected");
+}
+
+function toggleSidebar() {
+  isSidebarOpen = !isSidebarOpen;
+  persistSession();
+  render();
+}
+
+function refreshConversationList() {
+  contentDb.conversation_index = conversationIndex(contentDb);
+  persist();
+  render();
+  setStatus(els, "conversation list refreshed from local cache");
 }
 
 function saveProfile(event) {
@@ -273,8 +329,9 @@ function refreshVectorStoreChoices() {
 
 function resetLocalDatabases() {
   if (!window.confirm("Reload empty data and clear this page's browser-local MVP data?")) return;
-  ({ contentDb, userDb } = storage.reset());
+  ({ contentDb, userDb, session } = storage.reset());
   activeConversationId = firstConversationId(contentDb);
+  isSidebarOpen = true;
   render();
   setStatus(els, "empty database reloaded");
 }

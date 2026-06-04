@@ -2,6 +2,18 @@ export function firstConversationId(contentDb) {
   return contentDb.conversation_index?.[0]?.id || Object.keys(contentDb.conversations || {})[0];
 }
 
+export function conversationIndex(contentDb) {
+  const records = new Map();
+  for (const record of contentDb.conversation_index || []) {
+    if (record?.id) records.set(record.id, record);
+  }
+  for (const conversation of Object.values(contentDb.conversations || {})) {
+    if (!conversation?.id) continue;
+    records.set(conversation.id, conversationIndexRecord(conversation));
+  }
+  return [...records.values()].sort((a, b) => (b.update_time || 0) - (a.update_time || 0));
+}
+
 export function getActiveConversation(contentDb, activeConversationId) {
   return contentDb.conversations?.[activeConversationId] || null;
 }
@@ -16,7 +28,7 @@ export function createEmptyConversation(contentDb, profile) {
   const conversation = {
     id,
     conversation_id: id,
-    title: "Mobile test conversation",
+    title: "New conversation",
     create_time: now,
     update_time: now,
     current_node: null,
@@ -32,6 +44,19 @@ export function createEmptyConversation(contentDb, profile) {
   contentDb.conversations[id] = conversation;
   touchContentDb(contentDb, conversation);
   return conversation;
+}
+
+export function syncConversationSettings(conversation, profile) {
+  conversation.default_model_slug = profile.openai?.model || conversation.default_model_slug || "";
+  conversation.metadata ||= {};
+  conversation.metadata.provider = "supabase-edge";
+  conversation.metadata.model_provider = profile.model_provider || "openai";
+  conversation.metadata.system_prompt_name = profile.script?.name || "";
+}
+
+export function titleFromInput(text) {
+  const title = text.replace(/\s+/g, " ").trim().slice(0, 48);
+  return title || "New conversation";
 }
 
 export function appendNode(conversation, role, text, model) {
@@ -126,27 +151,30 @@ export function contentToText(content) {
 export function touchContentDb(contentDb, conversation) {
   conversation.update_time = Date.now() / 1000;
   contentDb.updated_at = new Date().toISOString();
+  const record = conversationIndexRecord(conversation);
+  const index = (contentDb.conversation_index || []).filter((item) => item.id !== conversation.id);
+  contentDb.conversation_index = [record, ...index].sort((a, b) => (b.update_time || 0) - (a.update_time || 0));
+}
+
+function conversationIndexRecord(conversation) {
   const preview = contentToText(conversation.mapping[conversation.current_node]?.message?.content)
     .replace(/\s+/g, " ")
     .slice(0, 160);
-  const record = {
+  return {
     id: conversation.id,
-    title: conversation.title,
+    title: conversation.title || "New conversation",
     create_time: conversation.create_time,
     update_time: conversation.update_time,
     current_node: conversation.current_node,
     default_model_slug: conversation.default_model_slug,
+    model_provider: conversation.metadata?.model_provider || "",
+    message_count: Object.values(conversation.mapping || {}).filter((node) => node.message).length,
     preview_text: preview,
     is_archived: conversation.is_archived ?? null,
     is_starred: conversation.is_starred ?? null,
     source_kind: conversation.source?.kind,
     has_unsupported_content: hasUnsupportedContent(conversation),
   };
-  const index = contentDb.conversation_index || [];
-  const existing = index.findIndex((item) => item.id === conversation.id);
-  if (existing >= 0) index[existing] = record;
-  else index.push(record);
-  contentDb.conversation_index = index;
 }
 
 function hasUnsupportedContent(conversation) {

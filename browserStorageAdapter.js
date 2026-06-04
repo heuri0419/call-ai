@@ -8,6 +8,7 @@ export function createBrowserStorageAdapter() {
       return {
         contentDb: loadJson(STORAGE_KEYS.content) || structuredCopy(seedContentDb),
         userDb: loadJson(STORAGE_KEYS.user) || structuredCopy(seedUserDb),
+        session: loadSession(),
       };
     },
 
@@ -16,12 +17,18 @@ export function createBrowserStorageAdapter() {
       localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(userDb));
     },
 
+    saveSession(session) {
+      sessionStorage.setItem(STORAGE_KEYS.session, JSON.stringify(session || {}));
+    },
+
     reset() {
       const state = {
         contentDb: structuredCopy(seedContentDb),
         userDb: structuredCopy(seedUserDb),
+        session: {},
       };
       this.save(state);
+      this.saveSession(state.session);
       return state;
     },
   };
@@ -30,4 +37,12 @@ export function createBrowserStorageAdapter() {
 function loadJson(key) {
   const value = localStorage.getItem(key);
   return value ? JSON.parse(value) : null;
+}
+
+function loadSession() {
+  try {
+    return JSON.parse(sessionStorage.getItem(STORAGE_KEYS.session) || "{}");
+  } catch {
+    return {};
+  }
 }

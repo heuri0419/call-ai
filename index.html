@@ -7,13 +7,27 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main class="app">
+    <div id="appShell" class="app-shell">
+      <aside class="conversation-sidebar" aria-label="conversation list">
+        <div class="sidebar-head">
+          <div>
+            <p class="eyebrow">cached chats</p>
+            <h2>Conversations</h2>
+          </div>
+          <button id="sidebarRefreshButton" class="icon-button" type="button" title="Refresh conversations">Refresh</button>
+        </div>
+        <button id="newConversationButton" class="new-chat-button" type="button">New chat</button>
+        <ul id="conversationList" class="conversation-list"></ul>
+      </aside>
+
+      <main class="app">
       <header class="topbar">
         <div>
           <h1>Mobile Cache MVP</h1>
           <p id="providerLine">Supabase Edge Function</p>
         </div>
         <div class="top-actions">
+          <button id="sidebarToggleButton" class="icon-button" type="button" title="Toggle conversations" aria-expanded="true">Hide chats</button>
           <button id="exportButton" class="icon-button" type="button" title="Export">Export</button>
           <button id="resetButton" class="icon-button" type="button" title="Reset">Reset</button>
         </div>
@@ -101,7 +115,8 @@
         <textarea id="inputBox" rows="4" placeholder="Type a prompt. The reply will come from the Supabase Edge Function and be saved into the local content database."></textarea>
         <button id="runButton" type="submit">Run</button>
       </form>
-    </main>
+      </main>
+    </div>
 
     <dialog id="editDialog">
       <form method="dialog" class="edit-form">
