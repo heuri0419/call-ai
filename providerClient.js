@@ -71,6 +71,28 @@ function createSupabaseOpenAiClient({ supabaseUrl, anonKey, jwt }) {
         prefer: "return=representation",
       });
     },
+
+    async listCloudConversations() {
+      return callSupabaseRest({
+        supabaseUrl,
+        anonKey,
+        jwt,
+        path: "cloud_conversations?select=conversation_id,payload,version,updated_at&order=updated_at.desc",
+      });
+    },
+
+    async saveCloudConversation(conversation, expectedVersion) {
+      return callEdgeFunction({
+        supabaseUrl,
+        anonKey,
+        jwt,
+        body: {
+          action: "save-cloud-conversation",
+          conversation,
+          expected_version: Number(expectedVersion) || 0,
+        },
+      });
+    },
   };
 }
 
@@ -102,7 +124,7 @@ async function callEdgeFunction({ supabaseUrl, anonKey, jwt, body }) {
 async function callSupabaseRest({ supabaseUrl, anonKey, jwt, path, method = "GET", body, prefer }) {
   if (!supabaseUrl) throw new Error("missing Supabase URL");
   if (!anonKey) throw new Error("missing Supabase anon key");
-  if (!jwt) throw new Error("Log in for JWT before using cloud presets.");
+  if (!jwt) throw new Error("Log in for JWT before using cloud data.");
 
   const baseUrl = supabaseUrl.replace(/\/+$/, "");
   const headers = {
@@ -119,7 +141,7 @@ async function callSupabaseRest({ supabaseUrl, anonKey, jwt, path, method = "GET
   });
   const data = await response.json().catch(() => []);
   if (!response.ok) {
-    throw new Error(data?.message || data?.hint || `Preset request failed with HTTP ${response.status}`);
+    throw new Error(data?.message || data?.hint || `Supabase request failed with HTTP ${response.status}`);
   }
   return Array.isArray(data) ? data : [];
 }

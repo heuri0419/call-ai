@@ -40,6 +40,11 @@ export function createEmptyConversation(contentDb, profile) {
       provider: "supabase-edge",
       model_provider: settings.model_provider,
       adapter_version: "mobile-cache-mvp",
+      cloud_sync: {
+        version: 0,
+        dirty: true,
+        synced_at: null,
+      },
     },
     source: { kind: "created_in_mobile_cache_mvp" },
   };
@@ -51,6 +56,7 @@ export function createEmptyConversation(contentDb, profile) {
 export function conversationSettings(conversation, profile) {
   const defaults = defaultConversationSettings(profile);
   const stored = conversation?.settings || {};
+
   return {
     model_provider: stored.model_provider || conversation?.metadata?.model_provider || defaults.model_provider,
     model: stored.model || conversation?.default_model_slug || defaults.model,
@@ -173,10 +179,80 @@ export function contentToText(content) {
 
 export function touchContentDb(contentDb, conversation) {
   conversation.update_time = Date.now() / 1000;
+  conversation.metadata ||= {};
+  conversation.metadata.cloud_sync ||= {};
+  conversation.metadata.cloud_sync.dirty = true;
   contentDb.updated_at = new Date().toISOString();
   const record = conversationIndexRecord(conversation);
   const index = (contentDb.conversation_index || []).filter((item) => item.id !== conversation.id);
   contentDb.conversation_index = [record, ...index].sort((a, b) => (b.update_time || 0) - (a.update_time || 0));
+}
+
+export function markConversationSynced(conversation, version) {
+  conversation.metadata ||= {};
+  conversation.metadata.cloud_sync = {
+    version: Number(version) || 0,
+    dirty: false,
+    synced_at: new Date().toISOString(),
+  };
+}
+
+export function conversationSyncState(conversation) {
+  const cloudSync = conversation?.metadata?.cloud_sync || {};
+  return {
+    version: Number(cloudSync.version) || 0,
+    dirty: cloudSync.dirty !== false,
+    synced_at: cloudSync.synced_at || null,
+  };
+}
+
+export function mergeConversationsByCreateTime(localConversation, remoteConversation) {
+  if (!localConversation?.id || localConversation.id !== remoteConversation?.id) return null;
+
+  const localUpdate = Number(localConversation.update_time) || 0;
+  const remoteUpdate = Number(remoteConversation.update_time) || 0;
+  const newer = localUpdate >= remoteUpdate ? localConversation : remoteConversation;
+  const older = newer === localConversation ? remoteConversation : localConversation;
+  const nodes = new Map();
+  const createTimes = [localConversation.create_time, remoteConversation.create_time]
+    .map((value) => Number(value))
+    .filter(Number.isFinite);
+
+  for (const node of Object.values(remoteConversation.mapping || {})) {
+    if (node?.id) nodes.set(node.id, node);
+  }
+  for (const node of Object.values(localConversation.mapping || {})) {
+    if (node?.id) nodes.set(node.id, node);
+  }
+
+  const orderedNodes = [...nodes.values()]
+    .map((node) => ({ ...node, children: [] }))
+    .sort((a, b) => nodeCreateTime(a) - nodeCreateTime(b) || String(a.id).localeCompare(String(b.id)));
+
+  const mapping = {};
+  for (let index = 0; index < orderedNodes.length; index += 1) {
+    const node = orderedNodes[index];
+    const parent = orderedNodes[index - 1]?.id || null;
+    const child = orderedNodes[index + 1]?.id;
+    node.parent = parent;
+    node.children = child ? [child] : [];
+    mapping[node.id] = node;
+  }
+
+  return {
+    ...older,
+    ...newer,
+    id: localConversation.id,
+    conversation_id: localConversation.id,
+    create_time: createTimes.length ? Math.min(...createTimes) : 0,
+    update_time: Math.max(localUpdate, remoteUpdate),
+    current_node: orderedNodes.at(-1)?.id || null,
+    mapping,
+    metadata: {
+      ...(older.metadata || {}),
+      ...(newer.metadata || {}),
+    },
+  };
 }
 
 function conversationIndexRecord(conversation) {
@@ -199,6 +275,8 @@ function conversationIndexRecord(conversation) {
     is_starred: conversation.is_starred ?? null,
     source_kind: conversation.source?.kind,
     has_unsupported_content: hasUnsupportedContent(conversation),
+    cloud_version: conversationSyncState(conversation).version,
+    cloud_dirty: conversationSyncState(conversation).dirty,
   };
 }
 
@@ -220,6 +298,10 @@ function hasUnsupportedContent(conversation) {
     const type = node.message?.content?.content_type;
     return type && type !== "text";
   });
+}
+
+function nodeCreateTime(node) {
+  return Number(node?.message?.create_time ?? node?.create_time) || 0;
 }
 
 function createMessage(role, text, time, model) {

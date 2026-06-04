@@ -5,6 +5,7 @@ export function getElements() {
     appShell: document.querySelector("#appShell"),
     sidebarToggleButton: document.querySelector("#sidebarToggleButton"),
     sidebarRefreshButton: document.querySelector("#sidebarRefreshButton"),
+    syncConversationsButton: document.querySelector("#syncConversationsButton"),
     newConversationButton: document.querySelector("#newConversationButton"),
     settingsButton: document.querySelector("#settingsButton"),
     compactSettingsButton: document.querySelector("#compactSettingsButton"),
@@ -125,6 +126,7 @@ function renderConversationList(els, conversations, activeConversationId, handle
       conversation.default_model_slug || "model?",
       conversation.system_prompt_name || "custom sys",
       `${conversation.message_count || 0} msg`,
+      syncLabel(conversation),
     ].join(" / ");
 
     const preview = document.createElement("span");
@@ -135,6 +137,12 @@ function renderConversationList(els, conversations, activeConversationId, handle
     item.append(button);
     els.conversationList.append(item);
   }
+}
+
+function syncLabel(conversation) {
+  const version = Number(conversation.cloud_version) || 0;
+  if (!version) return "local";
+  return conversation.cloud_dirty ? `unsynced v${version}` : `v${version}`;
 }
 
 function setVectorStoreDisabled(els, disabled) {

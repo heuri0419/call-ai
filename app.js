@@ -7,11 +7,14 @@ import {
   buildContext,
   conversationIndex,
   conversationSettings,
+  conversationSyncState,
   contentToText,
   createEmptyConversation,
   createPromptVersion,
   firstConversationId,
   getActiveConversation,
+  markConversationSynced,
+  mergeConversationsByCreateTime,
   syncConversationSettings,
   switchPromptVersion,
   titleFromInput,
@@ -39,6 +42,7 @@ if (!getActiveConversation(contentDb, activeConversationId)) {
 
 els.sidebarToggleButton.addEventListener("click", toggleSidebar);
 els.sidebarRefreshButton.addEventListener("click", refreshConversationList);
+els.syncConversationsButton.addEventListener("click", syncCloudConversations);
 els.newConversationButton.addEventListener("click", createConversationFromButton);
 els.settingsButton.addEventListener("click", openSettings);
 els.compactSettingsButton.addEventListener("click", openSettings);
@@ -140,7 +144,7 @@ async function runScript(event) {
   if (!supabase.anon_key) return setStatus(els, "missing Supabase anon key");
   if (!settings.model) return setStatus(els, "missing model");
 
-  const conversation = activeConversation() || createConversation(profile);
+  let conversation = activeConversation() || createConversation(profile);
   syncConversationSettings(conversation, settings);
   if (!conversation.current_node) conversation.title = titleFromInput(input);
   const userNode = appendNode(conversation, "user", input, null);
@@ -150,9 +154,21 @@ async function runScript(event) {
   render();
 
   els.runButton.disabled = true;
-  setStatus(els, "calling Supabase Edge Function");
   try {
     const provider = createProviderClient(profile);
+    if (supabase.jwt) {
+      setStatus(els, "saving prompt to cloud before model call");
+      const promptSync = await syncConversationSnapshot(provider, conversation);
+      persist();
+      render();
+      if (!promptSync.ok) {
+        setStatus(els, "prompt saved locally, cloud sync failed; model call stopped");
+        return;
+      }
+      conversation = activeConversation();
+    }
+
+    setStatus(els, "calling Supabase Edge Function");
     const output = await provider.runScript({
       provider: settings.model_provider,
       model: settings.model,
@@ -165,6 +181,21 @@ async function runScript(event) {
     conversation.current_node = assistantNode.id;
     touchContentDb(contentDb, conversation);
     persist();
+
+    if (supabase.jwt) {
+      setStatus(els, "saving reply to cloud");
+      const replySync = await syncConversationSnapshot(provider, conversation);
+      persist();
+      render();
+      els.inputBox.value = "";
+      if (!replySync.ok) {
+        setStatus(els, "reply saved locally, cloud sync failed");
+        return;
+      }
+      setStatus(els, "reply saved and synced");
+      return;
+    }
+
     els.inputBox.value = "";
     render();
     setStatus(els, "reply saved");
@@ -299,6 +330,106 @@ function refreshConversationList() {
   persist();
   render();
   setStatus(els, "conversation list refreshed from local cache");
+}
+
+async function syncCloudConversations() {
+  const profile = activeProfile(userDb);
+  const supabase = profile.supabase || {};
+  if (!supabase.url) return setStatus(els, "missing Supabase URL");
+  if (!supabase.anon_key) return setStatus(els, "missing Supabase anon key");
+  if (!supabase.jwt) return setStatus(els, "Log in for JWT before syncing conversations");
+
+  els.syncConversationsButton.disabled = true;
+  setStatus(els, "syncing conversations");
+  try {
+    const provider = createProviderClient(profile);
+    const remoteRows = await provider.listCloudConversations();
+    const remoteById = new Map(remoteRows.map((row) => [row.conversation_id, row]));
+    const result = { uploaded: 0, downloaded: 0, merged: 0, conflicts: 0 };
+
+    for (const conversation of Object.values(contentDb.conversations || {})) {
+      const remote = remoteById.get(conversation.id);
+      if (!remote) {
+        const saved = await syncConversationSnapshot(provider, conversation);
+        if (saved.ok) {
+          result.uploaded += 1;
+        } else {
+          result.conflicts += 1;
+        }
+        continue;
+      }
+
+      remoteById.delete(conversation.id);
+      const localSync = conversationSyncState(conversation);
+      const remoteVersion = Number(remote.version) || 0;
+      if (localSync.version === remoteVersion && localSync.dirty) {
+        const saved = await syncConversationSnapshot(provider, conversation);
+        if (saved.ok && saved.merged) result.merged += 1;
+        else if (saved.ok) result.uploaded += 1;
+        else result.conflicts += 1;
+      } else if (localSync.version < remoteVersion && !localSync.dirty) {
+        if (replaceConversationFromCloud(remote)) result.downloaded += 1;
+        else result.conflicts += 1;
+      } else if (localSync.version !== remoteVersion) {
+        if (await mergeAndSaveConflict(provider, conversation, remote)) result.merged += 1;
+        else result.conflicts += 1;
+      }
+    }
+
+    for (const remote of remoteById.values()) {
+      if (replaceConversationFromCloud(remote)) result.downloaded += 1;
+      else result.conflicts += 1;
+    }
+
+    contentDb.conversation_index = conversationIndex(contentDb);
+    if (!activeConversation() && contentDb.conversation_index[0]?.id) {
+      activeConversationId = contentDb.conversation_index[0].id;
+    }
+    persist();
+    render();
+    setStatus(
+      els,
+      `sync complete: ${result.uploaded} uploaded / ${result.downloaded} downloaded / ${result.merged} merged / ${result.conflicts} conflicts`,
+    );
+  } catch (error) {
+    setStatus(els, `sync failed: ${error.message}`);
+  } finally {
+    els.syncConversationsButton.disabled = false;
+  }
+}
+
+async function syncConversationSnapshot(provider, conversation) {
+  const localVersion = conversationSyncState(conversation).version;
+  const saved = await provider.saveCloudConversation(conversation, localVersion);
+  if (!saved.conflict && saved.row) {
+    markConversationSynced(conversation, saved.row.version);
+    return { ok: true, merged: false };
+  }
+  return {
+    ok: await mergeAndSaveConflict(provider, conversation, saved.row),
+    merged: true,
+  };
+}
+
+async function mergeAndSaveConflict(provider, localConversation, remoteRow) {
+  const remoteConversation = remoteRow?.payload;
+  const remoteVersion = Number(remoteRow?.version) || 0;
+  const merged = mergeConversationsByCreateTime(localConversation, remoteConversation);
+  if (!merged || !remoteVersion) return false;
+
+  const saved = await provider.saveCloudConversation(merged, remoteVersion);
+  if (saved.conflict || !saved.row) return false;
+  markConversationSynced(merged, saved.row.version);
+  contentDb.conversations[merged.id] = merged;
+  return true;
+}
+
+function replaceConversationFromCloud(remote) {
+  const conversation = remote?.payload;
+  if (!conversation || typeof conversation !== "object" || conversation.id !== remote.conversation_id) return false;
+  contentDb.conversations[conversation.id] = conversation;
+  markConversationSynced(conversation, remote.version);
+  return true;
 }
 
 function openSettings() {

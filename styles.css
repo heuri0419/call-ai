@@ -136,6 +136,24 @@ textarea {
   list-style: none;
 }
 
+.sidebar-actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+#syncConversationsButton {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  padding: 0 12px;
+}
+
+#syncConversationsButton:disabled {
+  opacity: 0.55;
+}
+
 .conversation-button {
   display: grid;
   gap: 5px;
