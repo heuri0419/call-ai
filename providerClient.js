@@ -36,7 +36,14 @@ function createSupabaseOpenAiClient({ supabaseUrl, anonKey, jwt }) {
         jwt,
         body: { action: "list-models", provider },
       });
-      return normalizeModels(Array.isArray(data.models) ? data.models : [], data.provider || provider || "openai");
+      const requestedProvider = provider || "openai";
+      const returnedProvider = data.provider || "openai";
+      if (returnedProvider !== requestedProvider) {
+        throw new Error(
+          `Requested ${requestedProvider} models but the Edge Function returned ${returnedProvider}. Redeploy run-script.`,
+        );
+      }
+      return normalizeModels(Array.isArray(data.models) ? data.models : [], returnedProvider);
     },
   };
 }
@@ -82,7 +89,7 @@ function normalizeModels(models, provider) {
 }
 
 function classifyGrokModel(id) {
-  if (/(image|vision)/i.test(id)) return "image";
+  if (/(imagine|image-generation|video|voice|tts|speech)/i.test(id)) return "media";
   if (/grok/i.test(id)) return "text";
   return "other";
 }
