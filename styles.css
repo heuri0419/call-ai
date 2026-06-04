@@ -88,7 +88,7 @@ textarea {
 
 .conversation-sidebar {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 12px;
   min-height: 100vh;
   border-right: 1px solid var(--line);
@@ -114,6 +114,15 @@ textarea {
   color: white;
   padding: 11px 14px;
   text-align: center;
+}
+
+.sidebar-settings-button {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  padding: 10px 12px;
+  text-align: left;
 }
 
 .conversation-list {
@@ -165,14 +174,13 @@ textarea {
 
 .app {
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   width: min(100vw, 860px);
   min-height: 100vh;
 }
 
 .topbar,
 .conversation-head,
-.config-panel,
 .composer {
   padding: 14px;
 }
@@ -183,6 +191,25 @@ textarea {
   justify-content: space-between;
   gap: 12px;
   border-bottom: 1px solid var(--line);
+  background: rgba(244, 245, 242, 0.96);
+}
+
+.topbar-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.topbar-title > div {
+  min-width: 0;
+}
+
+.topbar h1,
+#providerLine {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 h1,
@@ -219,6 +246,20 @@ h2 {
   gap: 8px;
 }
 
+.top-actions {
+  flex-shrink: 0;
+}
+
+.top-actions button,
+#chatSettingsButton {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  min-height: 38px;
+  padding: 0 12px;
+}
+
 .icon-button,
 .prompt-icon {
   display: inline-grid;
@@ -232,7 +273,8 @@ h2 {
 }
 
 #sidebarToggleButton,
-#sidebarRefreshButton {
+#sidebarRefreshButton,
+.top-actions .icon-button {
   width: auto;
   min-width: 38px;
   padding: 0 12px;
@@ -242,22 +284,9 @@ h2 {
   color: #b9beb6;
 }
 
-.config-panel,
 .conversation-head,
 .composer {
   border-bottom: 1px solid var(--line);
-}
-
-details {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface);
-  padding: 10px 12px;
-}
-
-summary {
-  cursor: pointer;
-  font-weight: 650;
 }
 
 .profile-form {
@@ -293,6 +322,7 @@ textarea {
 }
 
 #saveProfileButton,
+#saveChatSettingsButton,
 #runButton,
 .dialog-actions button {
   border: 0;
@@ -378,6 +408,55 @@ dialog {
   box-shadow: var(--shadow);
 }
 
+.settings-dialog {
+  max-height: 88vh;
+  padding: 0;
+  overflow: hidden;
+}
+
+.settings-form {
+  display: grid;
+  max-height: 88vh;
+  overflow: auto;
+}
+
+.dialog-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  padding: 16px;
+}
+
+.dialog-head h2 {
+  font-size: 20px;
+}
+
+.settings-section {
+  display: grid;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  padding: 16px;
+}
+
+.settings-section h3 {
+  font-size: 15px;
+}
+
+.settings-form > .dialog-actions {
+  position: sticky;
+  bottom: 0;
+  justify-content: space-between;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  padding: 12px 16px;
+}
+
 dialog::backdrop {
   background: rgba(20, 24, 22, 0.36);
 }
@@ -408,6 +487,21 @@ dialog::backdrop {
     max-height: 42vh;
     border-right: 0;
     border-bottom: 1px solid var(--line);
+  }
+
+  .topbar {
+    align-items: flex-start;
+  }
+
+  .top-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  #compactSettingsButton,
+  #exportButton,
+  #resetButton {
+    display: none;
   }
 
   .app-shell.sidebar-closed .conversation-sidebar {

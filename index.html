@@ -18,25 +18,52 @@
         </div>
         <button id="newConversationButton" class="new-chat-button" type="button">New chat</button>
         <ul id="conversationList" class="conversation-list"></ul>
+        <button id="settingsButton" class="sidebar-settings-button" type="button">Settings</button>
       </aside>
 
       <main class="app">
       <header class="topbar">
-        <div>
-          <h1>Mobile Cache MVP</h1>
-          <p id="providerLine">Supabase Edge Function</p>
+        <div class="topbar-title">
+          <button id="sidebarToggleButton" class="icon-button" type="button" title="Toggle conversations" aria-expanded="true">Chats</button>
+          <div>
+            <h1 id="conversationTitle">New conversation</h1>
+            <p id="providerLine">Supabase Edge Function</p>
+          </div>
         </div>
         <div class="top-actions">
-          <button id="sidebarToggleButton" class="icon-button" type="button" title="Toggle conversations" aria-expanded="true">Hide chats</button>
+          <button id="chatSettingsButton" type="button">Chat settings</button>
+          <button id="compactSettingsButton" class="icon-button" type="button" title="Settings">Settings</button>
           <button id="exportButton" class="icon-button" type="button" title="Export">Export</button>
           <button id="resetButton" class="icon-button" type="button" title="Reset">Reset</button>
         </div>
       </header>
 
-      <section class="config-panel">
-        <details open>
-          <summary>service provider</summary>
-          <form id="profileForm" class="profile-form">
+      <section class="conversation-head">
+        <p class="eyebrow">local conversation</p>
+        <p id="statusLine">idle</p>
+      </section>
+
+      <section id="messageStack" class="message-stack" aria-label="messages"></section>
+
+      <form id="runForm" class="composer">
+        <textarea id="inputBox" rows="4" placeholder="Message this conversation"></textarea>
+        <button id="runButton" type="submit">Run</button>
+      </form>
+      </main>
+    </div>
+
+    <dialog id="settingsDialog" class="settings-dialog">
+      <form id="profileForm" class="settings-form">
+        <div class="dialog-head">
+          <div>
+            <p class="eyebrow">application</p>
+            <h2>Settings</h2>
+          </div>
+          <button id="closeSettingsButton" class="icon-button" type="button" title="Close settings">Close</button>
+        </div>
+        <section class="settings-section">
+          <h3>Supabase connection</h3>
+          <div class="profile-form">
             <label>
               <span>Supabase URL</span>
               <input id="supabaseUrlInput" type="url" autocomplete="off" placeholder="https://project-ref.supabase.co" />
@@ -60,6 +87,36 @@
               </label>
               <button id="supabaseLoginButton" type="button">Log in for JWT</button>
             </div>
+          </div>
+        </section>
+        <section class="settings-section">
+          <h3>Vector store library</h3>
+          <div class="profile-form">
+            <label>
+              <span>Vector store aliases</span>
+              <input id="vectorStoreAliasesInput" type="text" autocomplete="off" placeholder="Optional, comma separated aliases" />
+            </label>
+          </div>
+        </section>
+        <div class="dialog-actions">
+          <p id="profileStatus">stored in this browser</p>
+          <button id="saveProfileButton" type="submit">Save settings</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="chatSettingsDialog" class="settings-dialog">
+      <form id="chatSettingsForm" class="settings-form">
+        <div class="dialog-head">
+          <div>
+            <p class="eyebrow">current conversation</p>
+            <h2>Chat settings</h2>
+          </div>
+          <button id="closeChatSettingsButton" class="icon-button" type="button" title="Close chat settings">Close</button>
+        </div>
+        <section class="settings-section">
+          <h3>Model</h3>
+          <div class="profile-form">
             <label>
               <span>Model provider</span>
               <select id="modelProviderSelect" class="model-select" aria-label="Model provider">
@@ -84,49 +141,40 @@
               </select>
             </label>
             <label>
-              <span>Vector store aliases</span>
-              <input id="vectorStoreAliasesInput" type="text" autocomplete="off" placeholder="Optional, comma separated aliases" />
-            </label>
-            <label>
               <span>Use vector store</span>
               <select id="activeVectorStoreSelect">
                 <option value="">None</option>
               </select>
             </label>
+          </div>
+        </section>
+        <section class="settings-section">
+          <h3>System prompt</h3>
+          <div class="profile-form">
             <label>
-              <span>System prompt</span>
+              <span>Preset</span>
               <div class="preset-picker">
                 <select id="systemPromptPresetSelect" aria-label="System prompt preset">
                   <option value="">No preset selected</option>
                 </select>
                 <button id="loadPresetsButton" type="button">Load presets</button>
               </div>
+            </label>
+            <label>
+              <span>System prompt</span>
               <textarea id="systemPromptInput" rows="4"></textarea>
             </label>
             <div class="preset-save">
               <input id="systemPromptPresetNameInput" type="text" autocomplete="off" placeholder="Preset name" />
               <button id="savePresetButton" type="button">Save as preset</button>
             </div>
-            <button id="saveProfileButton" type="submit">Save chat settings</button>
-            <p id="profileStatus">stored in this browser</p>
-          </form>
-        </details>
-      </section>
-
-      <section class="conversation-head">
-        <p class="eyebrow">content database</p>
-        <h2 id="conversationTitle">loading</h2>
-        <p id="statusLine">idle</p>
-      </section>
-
-      <section id="messageStack" class="message-stack" aria-label="messages"></section>
-
-      <form id="runForm" class="composer">
-        <textarea id="inputBox" rows="4" placeholder="Type a prompt. The reply will come from the Supabase Edge Function and be saved into the local content database."></textarea>
-        <button id="runButton" type="submit">Run</button>
+          </div>
+        </section>
+        <div class="dialog-actions">
+          <button id="saveChatSettingsButton" type="submit">Save chat settings</button>
+        </div>
       </form>
-      </main>
-    </div>
+    </dialog>
 
     <dialog id="editDialog">
       <form method="dialog" class="edit-form">

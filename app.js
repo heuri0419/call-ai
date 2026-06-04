@@ -40,6 +40,12 @@ if (!getActiveConversation(contentDb, activeConversationId)) {
 els.sidebarToggleButton.addEventListener("click", toggleSidebar);
 els.sidebarRefreshButton.addEventListener("click", refreshConversationList);
 els.newConversationButton.addEventListener("click", createConversationFromButton);
+els.settingsButton.addEventListener("click", openSettings);
+els.compactSettingsButton.addEventListener("click", openSettings);
+els.closeSettingsButton.addEventListener("click", () => els.settingsDialog.close());
+els.chatSettingsButton.addEventListener("click", openChatSettings);
+els.closeChatSettingsButton.addEventListener("click", () => els.chatSettingsDialog.close());
+els.chatSettingsForm.addEventListener("submit", saveChatSettings);
 els.profileForm.addEventListener("submit", saveProfile);
 els.supabaseLoginButton.addEventListener("click", loginWithSupabasePassword);
 els.modelProviderSelect.addEventListener("change", handleModelProviderChange);
@@ -295,6 +301,21 @@ function refreshConversationList() {
   setStatus(els, "conversation list refreshed from local cache");
 }
 
+function openSettings() {
+  els.settingsDialog.showModal();
+}
+
+function openChatSettings() {
+  els.chatSettingsDialog.showModal();
+}
+
+function saveChatSettings(event) {
+  event.preventDefault();
+  saveActiveConversationSettings();
+  els.chatSettingsDialog.close();
+  setStatus(els, "chat settings saved");
+}
+
 function saveProfile(event) {
   event.preventDefault();
   const profile = activeProfile(userDb);
@@ -327,6 +348,7 @@ function saveProfile(event) {
   els.supabaseJwtInput.value = "";
   els.supabasePasswordInput.value = "";
   els.profileStatus.textContent = "saved in browser storage";
+  els.settingsDialog.close();
   render();
 }
 

@@ -6,10 +6,15 @@ export function getElements() {
     sidebarToggleButton: document.querySelector("#sidebarToggleButton"),
     sidebarRefreshButton: document.querySelector("#sidebarRefreshButton"),
     newConversationButton: document.querySelector("#newConversationButton"),
+    settingsButton: document.querySelector("#settingsButton"),
+    compactSettingsButton: document.querySelector("#compactSettingsButton"),
+    chatSettingsButton: document.querySelector("#chatSettingsButton"),
     conversationList: document.querySelector("#conversationList"),
     providerLine: document.querySelector("#providerLine"),
     exportButton: document.querySelector("#exportButton"),
     resetButton: document.querySelector("#resetButton"),
+    settingsDialog: document.querySelector("#settingsDialog"),
+    closeSettingsButton: document.querySelector("#closeSettingsButton"),
     profileForm: document.querySelector("#profileForm"),
     supabaseUrlInput: document.querySelector("#supabaseUrlInput"),
     supabaseAnonKeyInput: document.querySelector("#supabaseAnonKeyInput"),
@@ -30,6 +35,9 @@ export function getElements() {
     systemPromptPresetNameInput: document.querySelector("#systemPromptPresetNameInput"),
     loadPresetsButton: document.querySelector("#loadPresetsButton"),
     savePresetButton: document.querySelector("#savePresetButton"),
+    chatSettingsDialog: document.querySelector("#chatSettingsDialog"),
+    chatSettingsForm: document.querySelector("#chatSettingsForm"),
+    closeChatSettingsButton: document.querySelector("#closeChatSettingsButton"),
     profileStatus: document.querySelector("#profileStatus"),
     conversationTitle: document.querySelector("#conversationTitle"),
     statusLine: document.querySelector("#statusLine"),
@@ -63,7 +71,7 @@ export function renderApp(
   const settings = conversationSettings(conversation, profile);
   const modelProvider = settings.model_provider;
   els.appShell.classList.toggle("sidebar-closed", !isSidebarOpen);
-  els.sidebarToggleButton.textContent = isSidebarOpen ? "Hide chats" : "Chats";
+  els.sidebarToggleButton.textContent = isSidebarOpen ? "Hide" : "Chats";
   els.sidebarToggleButton.setAttribute("aria-expanded", String(isSidebarOpen));
   els.providerLine.textContent = [
     profile.provider || "supabase-edge",
