@@ -94,7 +94,7 @@ async function runScript(event) {
   const profile = activeProfile(userDb);
   const supabase = profile.supabase || {};
   const openai = profile.openai || {};
-  const modelProvider = activeModelProvider(profile);
+  const modelProvider = selectedModelProvider(profile);
   if (!supabase.url) return setStatus(els, "missing Supabase URL");
   if (!supabase.anon_key) return setStatus(els, "missing Supabase anon key");
   if (!openai.model) return setStatus(els, "missing model");
@@ -135,7 +135,7 @@ async function runScript(event) {
 async function loadModelChoices() {
   const profile = activeProfile(userDb);
   const supabase = profile.supabase || {};
-  const modelProvider = activeModelProvider(profile);
+  const modelProvider = selectedModelProvider(profile);
   if (!supabase.url) return setStatus(els, "missing Supabase URL");
   if (!supabase.anon_key) return setStatus(els, "missing Supabase anon key");
 
@@ -284,6 +284,7 @@ function handleModelProviderChange() {
   profile.model_provider = normalizedModelProvider(els.modelProviderSelect.value);
   loadedModels = [];
   refreshModelChoices();
+  persist();
   render();
 }
 
@@ -296,6 +297,12 @@ function selectedVectorStoreNames(profile) {
 
 function activeModelProvider(profile) {
   return normalizedModelProvider(profile.model_provider);
+}
+
+function selectedModelProvider(profile) {
+  const modelProvider = normalizedModelProvider(els.modelProviderSelect.value || profile.model_provider);
+  profile.model_provider = modelProvider;
+  return modelProvider;
 }
 
 function normalizedModelProvider(value) {
