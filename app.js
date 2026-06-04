@@ -29,6 +29,10 @@ let loadedModels = [];
 let loadedPresets = [];
 let isSidebarOpen = session.is_sidebar_open !== false;
 
+const initialProfile = activeProfile(userDb);
+initialProfile.supabase ||= {};
+initialProfile.supabase.jwt = session.supabase_jwt || initialProfile.supabase.jwt || "";
+
 if (!getActiveConversation(contentDb, activeConversationId)) {
   activeConversationId = firstConversationId(contentDb);
 }
@@ -83,9 +87,11 @@ function persist() {
 }
 
 function persistSession() {
+  const profile = activeProfile(userDb);
   storage.saveSession({
     active_conversation_id: activeConversationId || "",
     is_sidebar_open: isSidebarOpen,
+    supabase_jwt: profile.supabase?.jwt || "",
   });
 }
 
@@ -341,18 +347,18 @@ async function loginWithSupabasePassword() {
   els.supabaseLoginButton.disabled = true;
   setStatus(els, "requesting Supabase user JWT");
   try {
-    const session = await requestSupabasePasswordSession({ supabaseUrl, anonKey, email, password });
-    if (!session.access_token) throw new Error("Supabase did not return an access token.");
+    const authSession = await requestSupabasePasswordSession({ supabaseUrl, anonKey, email, password });
+    if (!authSession.access_token) throw new Error("Supabase did not return an access token.");
 
     profile.supabase.url = supabaseUrl;
     profile.supabase.anon_key = anonKey;
-    profile.supabase.jwt = session.access_token;
+    profile.supabase.jwt = authSession.access_token;
     userDb.updated_at = new Date().toISOString();
     persist();
 
     els.supabasePasswordInput.value = "";
     els.supabaseJwtInput.value = "";
-    els.profileStatus.textContent = session.user?.email ? `logged in as ${session.user.email}` : "JWT saved";
+    els.profileStatus.textContent = authSession.user?.email ? `logged in as ${authSession.user.email}` : "JWT saved";
     render();
     setStatus(els, "Supabase JWT saved");
   } catch (error) {

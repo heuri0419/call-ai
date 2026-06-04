@@ -14,7 +14,7 @@ export function createBrowserStorageAdapter() {
 
     save({ contentDb, userDb }) {
       localStorage.setItem(STORAGE_KEYS.content, JSON.stringify(contentDb));
-      localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(userDb));
+      localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(withoutSessionSecrets(userDb)));
     },
 
     saveSession(session) {
@@ -45,4 +45,12 @@ function loadSession() {
   } catch {
     return {};
   }
+}
+
+function withoutSessionSecrets(userDb) {
+  const copy = structuredCopy(userDb);
+  for (const profile of Object.values(copy.profiles || {})) {
+    if (profile.supabase) profile.supabase.jwt = "";
+  }
+  return copy;
 }
