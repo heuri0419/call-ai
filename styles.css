@@ -49,6 +49,13 @@ textarea {
   align-items: end;
 }
 
+.local-import {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
 .model-picker button,
 .preset-picker button,
 .preset-save button {
@@ -60,6 +67,14 @@ textarea {
 }
 
 .auth-login button {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  padding: 11px 12px;
+}
+
+.local-import button {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);

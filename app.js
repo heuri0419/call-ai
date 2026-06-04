@@ -1,5 +1,6 @@
 import { createBrowserStorageAdapter } from "./browserStorageAdapter.js";
 import { exportDatabases } from "./exportAdapter.js";
+import { importGrokExport } from "./grokImportAdapter.js";
 import { createProviderClient } from "./providerClient.js";
 import {
   activeProfile,
@@ -14,7 +15,7 @@ import {
   firstConversationId,
   getActiveConversation,
   markConversationSynced,
-  mergeConversationsByCreateTime,
+  mergeConversationsPreservingParents,
   syncConversationSettings,
   switchPromptVersion,
   titleFromInput,
@@ -52,6 +53,7 @@ els.closeChatSettingsButton.addEventListener("click", () => closeDialog(els.chat
 els.chatSettingsForm.addEventListener("submit", saveChatSettings);
 els.profileForm.addEventListener("submit", saveProfile);
 els.supabaseLoginButton.addEventListener("click", loginWithSupabasePassword);
+els.importGrokButton.addEventListener("click", importGrokConversations);
 els.modelProviderSelect.addEventListener("change", handleModelProviderChange);
 els.vectorStoreAliasesInput.addEventListener("input", refreshVectorStoreChoices);
 els.loadModelsButton.addEventListener("click", loadModelChoices);
@@ -332,6 +334,35 @@ function refreshConversationList() {
   setStatus(els, "conversation list refreshed from local cache");
 }
 
+async function importGrokConversations() {
+  const file = els.grokExportFileInput.files?.[0];
+  if (!file) return setStatus(els, "choose prod-grok-backend.json first");
+
+  els.importGrokButton.disabled = true;
+  setStatus(els, "reading Grok export locally");
+  try {
+    const data = JSON.parse(await file.text());
+    const result = importGrokExport(data, contentDb.conversations || {});
+    for (const conversation of result.conversations) {
+      contentDb.conversations[conversation.id] = conversation;
+    }
+    contentDb.updated_at = new Date().toISOString();
+    contentDb.conversation_index = conversationIndex(contentDb);
+    if (result.conversations[0]) activeConversationId = result.conversations[0].id;
+    persist();
+    render();
+    els.grokExportFileInput.value = "";
+    setStatus(
+      els,
+      `Grok import complete: ${result.added} added / ${result.updated} updated / ${result.unchanged} unchanged / ${result.rejected} rejected`,
+    );
+  } catch (error) {
+    setStatus(els, `Grok import failed: ${error.message}`);
+  } finally {
+    els.importGrokButton.disabled = false;
+  }
+}
+
 async function syncCloudConversations() {
   const profile = activeProfile(userDb);
   const supabase = profile.supabase || {};
@@ -414,7 +445,7 @@ async function syncConversationSnapshot(provider, conversation) {
 async function mergeAndSaveConflict(provider, localConversation, remoteRow) {
   const remoteConversation = remoteRow?.payload;
   const remoteVersion = Number(remoteRow?.version) || 0;
-  const merged = mergeConversationsByCreateTime(localConversation, remoteConversation);
+  const merged = mergeConversationsPreservingParents(localConversation, remoteConversation);
   if (!merged || !remoteVersion) return false;
 
   const saved = await provider.saveCloudConversation(merged, remoteVersion);

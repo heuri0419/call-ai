@@ -206,7 +206,7 @@ export function conversationSyncState(conversation) {
   };
 }
 
-export function mergeConversationsByCreateTime(localConversation, remoteConversation) {
+export function mergeConversationsPreservingParents(localConversation, remoteConversation) {
   if (!localConversation?.id || localConversation.id !== remoteConversation?.id) return null;
 
   const localUpdate = Number(localConversation.update_time) || 0;
@@ -218,10 +218,10 @@ export function mergeConversationsByCreateTime(localConversation, remoteConversa
     .map((value) => Number(value))
     .filter(Number.isFinite);
 
-  for (const node of Object.values(remoteConversation.mapping || {})) {
+  for (const node of Object.values(older.mapping || {})) {
     if (node?.id) nodes.set(node.id, node);
   }
-  for (const node of Object.values(localConversation.mapping || {})) {
+  for (const node of Object.values(newer.mapping || {})) {
     if (node?.id) nodes.set(node.id, node);
   }
 
@@ -229,15 +229,28 @@ export function mergeConversationsByCreateTime(localConversation, remoteConversa
     .map((node) => ({ ...node, children: [] }))
     .sort((a, b) => nodeCreateTime(a) - nodeCreateTime(b) || String(a.id).localeCompare(String(b.id)));
 
-  const mapping = {};
-  for (let index = 0; index < orderedNodes.length; index += 1) {
-    const node = orderedNodes[index];
-    const parent = orderedNodes[index - 1]?.id || null;
-    const child = orderedNodes[index + 1]?.id;
-    node.parent = parent;
-    node.children = child ? [child] : [];
-    mapping[node.id] = node;
+  const mapping = Object.fromEntries(orderedNodes.map((node) => [node.id, node]));
+  let fallbackTail = null;
+  for (const node of orderedNodes) {
+    const parentId = node.parent || null;
+    if (parentId && (!mapping[parentId] || parentId === node.id || createsParentCycle(mapping, node.id, parentId))) {
+      node.parent = fallbackTail && !createsParentCycle(mapping, node.id, fallbackTail) ? fallbackTail : null;
+    }
+    fallbackTail = node.id;
   }
+
+  for (const node of orderedNodes) {
+    if (node.parent && mapping[node.parent]) mapping[node.parent].children.push(node.id);
+  }
+  for (const node of orderedNodes) {
+    node.children.sort((a, b) => nodeCreateTime(mapping[a]) - nodeCreateTime(mapping[b]) || a.localeCompare(b));
+  }
+
+  const currentNode = mapping[newer.current_node]
+    ? newer.current_node
+    : mapping[older.current_node]
+      ? older.current_node
+      : orderedNodes.at(-1)?.id || null;
 
   return {
     ...older,
@@ -246,7 +259,7 @@ export function mergeConversationsByCreateTime(localConversation, remoteConversa
     conversation_id: localConversation.id,
     create_time: createTimes.length ? Math.min(...createTimes) : 0,
     update_time: Math.max(localUpdate, remoteUpdate),
-    current_node: orderedNodes.at(-1)?.id || null,
+    current_node: currentNode,
     mapping,
     metadata: {
       ...(older.metadata || {}),
@@ -302,6 +315,17 @@ function hasUnsupportedContent(conversation) {
 
 function nodeCreateTime(node) {
   return Number(node?.message?.create_time ?? node?.create_time) || 0;
+}
+
+function createsParentCycle(mapping, nodeId, parentId) {
+  const seen = new Set([nodeId]);
+  let current = parentId;
+  while (current && mapping[current]) {
+    if (seen.has(current)) return true;
+    seen.add(current);
+    current = mapping[current].parent || null;
+  }
+  return false;
 }
 
 function createMessage(role, text, time, model) {

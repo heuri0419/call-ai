@@ -23,6 +23,8 @@ export function getElements() {
     supabaseEmailInput: document.querySelector("#supabaseEmailInput"),
     supabasePasswordInput: document.querySelector("#supabasePasswordInput"),
     supabaseLoginButton: document.querySelector("#supabaseLoginButton"),
+    grokExportFileInput: document.querySelector("#grokExportFileInput"),
+    importGrokButton: document.querySelector("#importGrokButton"),
     modelProviderSelect: document.querySelector("#modelProviderSelect"),
     modelInput: document.querySelector("#modelInput"),
     modelList: document.querySelector("#modelList"),
