@@ -45,6 +45,32 @@ function createSupabaseOpenAiClient({ supabaseUrl, anonKey, jwt }) {
       }
       return normalizeModels(Array.isArray(data.models) ? data.models : [], returnedProvider);
     },
+
+    async listSystemPromptPresets() {
+      return callSupabaseRest({
+        supabaseUrl,
+        anonKey,
+        jwt,
+        path: "system_prompt_presets?select=id,name,content,provider,model_hint,is_default&order=name.asc",
+      });
+    },
+
+    async createSystemPromptPreset({ name, content, provider, modelHint }) {
+      return callSupabaseRest({
+        supabaseUrl,
+        anonKey,
+        jwt,
+        path: "system_prompt_presets",
+        method: "POST",
+        body: {
+          name,
+          content,
+          provider: provider || "all",
+          model_hint: modelHint || null,
+        },
+        prefer: "return=representation",
+      });
+    },
   };
 }
 
@@ -71,6 +97,31 @@ async function callEdgeFunction({ supabaseUrl, anonKey, jwt, body }) {
     throw new Error(message);
   }
   return data;
+}
+
+async function callSupabaseRest({ supabaseUrl, anonKey, jwt, path, method = "GET", body, prefer }) {
+  if (!supabaseUrl) throw new Error("missing Supabase URL");
+  if (!anonKey) throw new Error("missing Supabase anon key");
+  if (!jwt) throw new Error("Log in for JWT before using cloud presets.");
+
+  const baseUrl = supabaseUrl.replace(/\/+$/, "");
+  const headers = {
+    apikey: anonKey,
+    Authorization: `Bearer ${jwt}`,
+    "Content-Type": "application/json",
+  };
+  if (prefer) headers.Prefer = prefer;
+
+  const response = await fetch(`${baseUrl}/rest/v1/${path}`, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await response.json().catch(() => []);
+  if (!response.ok) {
+    throw new Error(data?.message || data?.hint || `Preset request failed with HTTP ${response.status}`);
+  }
+  return Array.isArray(data) ? data : [];
 }
 
 function normalizeModels(models, provider) {

@@ -95,9 +95,19 @@
             </label>
             <label>
               <span>System prompt</span>
+              <div class="preset-picker">
+                <select id="systemPromptPresetSelect" aria-label="System prompt preset">
+                  <option value="">No preset selected</option>
+                </select>
+                <button id="loadPresetsButton" type="button">Load presets</button>
+              </div>
               <textarea id="systemPromptInput" rows="4"></textarea>
             </label>
-            <button id="saveProfileButton" type="submit">Save settings</button>
+            <div class="preset-save">
+              <input id="systemPromptPresetNameInput" type="text" autocomplete="off" placeholder="Preset name" />
+              <button id="savePresetButton" type="button">Save as preset</button>
+            </div>
+            <button id="saveProfileButton" type="submit">Save chat settings</button>
             <p id="profileStatus">stored in this browser</p>
           </form>
         </details>

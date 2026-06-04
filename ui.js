@@ -1,4 +1,4 @@
-import { contentToText, currentPath, promptVersions } from "./chatDomain.js";
+import { contentToText, conversationSettings, currentPath, promptVersions } from "./chatDomain.js";
 
 export function getElements() {
   return {
@@ -26,6 +26,10 @@ export function getElements() {
     vectorStoreAliasesInput: document.querySelector("#vectorStoreAliasesInput"),
     activeVectorStoreSelect: document.querySelector("#activeVectorStoreSelect"),
     systemPromptInput: document.querySelector("#systemPromptInput"),
+    systemPromptPresetSelect: document.querySelector("#systemPromptPresetSelect"),
+    systemPromptPresetNameInput: document.querySelector("#systemPromptPresetNameInput"),
+    loadPresetsButton: document.querySelector("#loadPresetsButton"),
+    savePresetButton: document.querySelector("#savePresetButton"),
     profileStatus: document.querySelector("#profileStatus"),
     conversationTitle: document.querySelector("#conversationTitle"),
     statusLine: document.querySelector("#statusLine"),
@@ -47,6 +51,7 @@ export function renderApp(
     conversations,
     activeConversationId,
     isSidebarOpen,
+    presets,
     onSelectConversation,
     onNewConversation,
     onEditPrompt,
@@ -55,7 +60,8 @@ export function renderApp(
 ) {
   const supabase = profile.supabase || {};
   const openai = profile.openai || {};
-  const modelProvider = profile.model_provider || "openai";
+  const settings = conversationSettings(conversation, profile);
+  const modelProvider = settings.model_provider;
   els.appShell.classList.toggle("sidebar-closed", !isSidebarOpen);
   els.sidebarToggleButton.textContent = isSidebarOpen ? "Hide chats" : "Chats";
   els.sidebarToggleButton.setAttribute("aria-expanded", String(isSidebarOpen));
@@ -65,16 +71,18 @@ export function renderApp(
     supabase.url ? "url set" : "no url",
     supabase.anon_key ? "anon key set" : "no anon key",
     supabase.jwt ? "jwt set" : "no jwt",
-    openai.model || "no model",
-    activeVectorStoreAlias(openai) || "no vector",
+    settings.model || "no model",
+    settings.vector_store_names[0] || "no vector",
   ].join(" / ");
 
   els.supabaseUrlInput.value = supabase.url || "";
   els.modelProviderSelect.value = modelProvider;
-  els.modelInput.value = openai.model || "";
-  renderVectorStoreSelect(els, openai);
+  els.modelInput.value = settings.model || "";
+  renderVectorStoreSelect(els, openai, settings.vector_store_names[0] || "");
   setVectorStoreDisabled(els, modelProvider !== "openai");
-  els.systemPromptInput.value = profile.script?.system_prompt || "";
+  els.systemPromptInput.value = settings.system_prompt || "";
+  els.systemPromptPresetNameInput.value = settings.system_prompt_preset_name || "";
+  renderPresetChoices(els, presets, settings.system_prompt_preset_id);
   els.conversationTitle.textContent = conversation?.title || "Empty content database";
   renderConversationList(els, conversations, activeConversationId, { onSelectConversation, onNewConversation });
   renderMessages(els, conversation, { onEditPrompt, onSwitchPromptVersion });
@@ -107,6 +115,7 @@ function renderConversationList(els, conversations, activeConversationId, handle
     meta.textContent = [
       conversation.model_provider || "provider?",
       conversation.default_model_slug || "model?",
+      conversation.system_prompt_name || "custom sys",
       `${conversation.message_count || 0} msg`,
     ].join(" / ");
 
@@ -138,6 +147,16 @@ export function renderModelChoices(els, models, filter = "text") {
   els.modelSelect.value = modelIds.includes(els.modelInput.value) ? els.modelInput.value : "";
 }
 
+export function renderPresetChoices(els, presets, selectedId = "") {
+  els.systemPromptPresetSelect.replaceChildren(new Option("No preset selected", ""));
+  for (const preset of presets || []) {
+    const provider = preset.provider && preset.provider !== "all" ? ` / ${preset.provider}` : "";
+    const label = `${preset.name}${provider}${preset.is_default ? " / default" : ""}`;
+    els.systemPromptPresetSelect.append(new Option(label, preset.id));
+  }
+  els.systemPromptPresetSelect.value = (presets || []).some((preset) => preset.id === selectedId) ? selectedId : "";
+}
+
 function filterModels(models, filter) {
   if (filter === "fine-tuned") return models.filter((model) => model.is_fine_tuned);
   if (filter === "all") return models;
@@ -160,9 +179,9 @@ export function activeVectorStoreAlias(openai) {
   return aliases.length === 1 ? aliases[0] : "";
 }
 
-function renderVectorStoreSelect(els, openai) {
+function renderVectorStoreSelect(els, openai, activeOverride = "") {
   const aliases = vectorStoreAliases(openai);
-  const active = activeVectorStoreAlias(openai);
+  const active = activeOverride || activeVectorStoreAlias(openai);
   els.vectorStoreAliasesInput.value = aliases.join(", ");
   els.activeVectorStoreSelect.replaceChildren(new Option("None", ""));
   for (const alias of aliases) {

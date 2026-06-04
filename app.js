@@ -6,6 +6,7 @@ import {
   appendNode,
   buildContext,
   conversationIndex,
+  conversationSettings,
   contentToText,
   createEmptyConversation,
   createPromptVersion,
@@ -16,7 +17,7 @@ import {
   titleFromInput,
   touchContentDb,
 } from "./chatDomain.js";
-import { activeVectorStoreAlias, getElements, openPromptEditor, renderApp, renderModelChoices, setStatus } from "./ui.js";
+import { getElements, openPromptEditor, renderApp, renderModelChoices, renderPresetChoices, setStatus } from "./ui.js";
 
 const storage = createBrowserStorageAdapter();
 const els = getElements();
@@ -25,6 +26,7 @@ let { contentDb, userDb, session } = storage.load();
 let activeConversationId = session.active_conversation_id || firstConversationId(contentDb);
 let editingNodeId = null;
 let loadedModels = [];
+let loadedPresets = [];
 let isSidebarOpen = session.is_sidebar_open !== false;
 
 if (!getActiveConversation(contentDb, activeConversationId)) {
@@ -41,6 +43,9 @@ els.vectorStoreAliasesInput.addEventListener("input", refreshVectorStoreChoices)
 els.loadModelsButton.addEventListener("click", loadModelChoices);
 els.modelFilterSelect.addEventListener("change", refreshModelChoices);
 els.modelSelect.addEventListener("change", applySelectedModel);
+els.systemPromptPresetSelect.addEventListener("change", applySelectedPreset);
+els.loadPresetsButton.addEventListener("click", loadSystemPromptPresets);
+els.savePresetButton.addEventListener("click", saveSystemPromptPreset);
 els.runForm.addEventListener("submit", runScript);
 els.exportButton.addEventListener("click", () => {
   exportDatabases({ contentDb, userDb });
@@ -60,6 +65,7 @@ function render() {
     conversations: conversationIndex(contentDb),
     activeConversationId,
     isSidebarOpen,
+    presets: loadedPresets,
     onSelectConversation: selectConversation,
     onNewConversation: createConversationFromButton,
     onEditPrompt: handleEditPrompt,
@@ -117,14 +123,13 @@ async function runScript(event) {
 
   const profile = activeProfile(userDb);
   const supabase = profile.supabase || {};
-  const openai = profile.openai || {};
-  const modelProvider = selectedModelProvider(profile);
+  const settings = settingsFromForm(profile);
   if (!supabase.url) return setStatus(els, "missing Supabase URL");
   if (!supabase.anon_key) return setStatus(els, "missing Supabase anon key");
-  if (!openai.model) return setStatus(els, "missing model");
+  if (!settings.model) return setStatus(els, "missing model");
 
   const conversation = activeConversation() || createConversation(profile);
-  syncConversationSettings(conversation, profile);
+  syncConversationSettings(conversation, settings);
   if (!conversation.current_node) conversation.title = titleFromInput(input);
   const userNode = appendNode(conversation, "user", input, null);
   conversation.current_node = userNode.id;
@@ -137,14 +142,14 @@ async function runScript(event) {
   try {
     const provider = createProviderClient(profile);
     const output = await provider.runScript({
-      provider: modelProvider,
-      model: openai.model,
-      vectorStoreNames: selectedVectorStoreNames(profile),
-      systemPrompt: profile.script?.system_prompt || "",
+      provider: settings.model_provider,
+      model: settings.model,
+      vectorStoreNames: settings.model_provider === "openai" ? settings.vector_store_names : [],
+      systemPrompt: settings.system_prompt,
       context: buildContext(conversation, profile.script?.context_node_limit || 6),
       input,
     });
-    const assistantNode = appendNode(conversation, "assistant", output, openai.model);
+    const assistantNode = appendNode(conversation, "assistant", output, settings.model);
     conversation.current_node = assistantNode.id;
     touchContentDb(contentDb, conversation);
     persist();
@@ -186,6 +191,66 @@ function refreshModelChoices() {
 function applySelectedModel() {
   if (!els.modelSelect.value) return;
   els.modelInput.value = els.modelSelect.value;
+}
+
+function applySelectedPreset() {
+  const preset = loadedPresets.find((item) => item.id === els.systemPromptPresetSelect.value);
+  if (!preset) {
+    els.systemPromptPresetNameInput.value = "";
+    saveActiveConversationSettings({});
+    setStatus(els, "preset link cleared");
+    return;
+  }
+  els.systemPromptInput.value = preset.content || "";
+  els.systemPromptPresetNameInput.value = preset.name || "";
+  if (preset.provider && preset.provider !== "all") els.modelProviderSelect.value = preset.provider;
+  if (preset.model_hint) els.modelInput.value = preset.model_hint;
+  saveActiveConversationSettings();
+  setStatus(els, `preset applied: ${preset.name}`);
+}
+
+async function loadSystemPromptPresets() {
+  const profile = activeProfile(userDb);
+  els.loadPresetsButton.disabled = true;
+  setStatus(els, "loading system prompt presets");
+  try {
+    loadedPresets = await createProviderClient(profile).listSystemPromptPresets();
+    const selectedId = conversationSettings(activeConversation(), profile).system_prompt_preset_id;
+    renderPresetChoices(els, loadedPresets, selectedId);
+    setStatus(els, loadedPresets.length ? `loaded ${loadedPresets.length} presets` : "no presets returned");
+  } catch (error) {
+    setStatus(els, `preset load failed: ${error.message}`);
+  } finally {
+    els.loadPresetsButton.disabled = false;
+  }
+}
+
+async function saveSystemPromptPreset() {
+  const profile = activeProfile(userDb);
+  const name = els.systemPromptPresetNameInput.value.trim();
+  const content = els.systemPromptInput.value.trim();
+  if (!name) return setStatus(els, "preset name is empty");
+  if (!content) return setStatus(els, "system prompt is empty");
+
+  els.savePresetButton.disabled = true;
+  setStatus(els, "saving system prompt preset");
+  try {
+    const created = await createProviderClient(profile).createSystemPromptPreset({
+      name,
+      content,
+      provider: normalizedModelProvider(els.modelProviderSelect.value),
+      modelHint: els.modelInput.value.trim(),
+    });
+    loadedPresets = [...loadedPresets.filter((item) => item.id !== created[0]?.id), ...created]
+      .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+    if (created[0]?.id) els.systemPromptPresetSelect.value = created[0].id;
+    saveActiveConversationSettings(created[0] || null);
+    setStatus(els, `preset saved: ${name}`);
+  } catch (error) {
+    setStatus(els, `preset save failed: ${error.message}`);
+  } finally {
+    els.savePresetButton.disabled = false;
+  }
 }
 
 function createConversation(profile) {
@@ -248,6 +313,8 @@ function saveProfile(event) {
   delete profile.openai.active_vector_store_name;
   profile.script ||= {};
   profile.script.system_prompt = els.systemPromptInput.value.trim();
+  profile.script.name = selectedPreset()?.name || "";
+  saveActiveConversationSettings();
   userDb.updated_at = new Date().toISOString();
   persist();
   els.supabaseAnonKeyInput.value = "";
@@ -337,29 +404,41 @@ function resetLocalDatabases() {
 }
 
 function handleModelProviderChange() {
-  const profile = activeProfile(userDb);
-  profile.model_provider = normalizedModelProvider(els.modelProviderSelect.value);
   loadedModels = [];
   refreshModelChoices();
-  persist();
-  render();
-}
-
-function selectedVectorStoreNames(profile) {
-  if (activeModelProvider(profile) !== "openai") return [];
-  const openai = profile.openai || {};
-  const alias = activeVectorStoreAlias(openai);
-  return alias ? [alias] : [];
-}
-
-function activeModelProvider(profile) {
-  return normalizedModelProvider(profile.model_provider);
+  saveActiveConversationSettings();
 }
 
 function selectedModelProvider(profile) {
   const modelProvider = normalizedModelProvider(els.modelProviderSelect.value || profile.model_provider);
-  profile.model_provider = modelProvider;
   return modelProvider;
+}
+
+function settingsFromForm(profile, presetOverride = null) {
+  const preset = presetOverride || selectedPreset();
+  const vectorStoreName = els.activeVectorStoreSelect.value.trim();
+  return {
+    model_provider: selectedModelProvider(profile),
+    model: els.modelInput.value.trim(),
+    vector_store_names: vectorStoreName ? [vectorStoreName] : [],
+    system_prompt: els.systemPromptInput.value.trim(),
+    system_prompt_preset_id: preset?.id || "",
+    system_prompt_preset_name: preset?.name || "",
+  };
+}
+
+function selectedPreset() {
+  return loadedPresets.find((item) => item.id === els.systemPromptPresetSelect.value) || null;
+}
+
+function saveActiveConversationSettings(presetOverride = null) {
+  const profile = activeProfile(userDb);
+  const conversation = activeConversation();
+  if (!conversation) return;
+  syncConversationSettings(conversation, settingsFromForm(profile, presetOverride));
+  touchContentDb(contentDb, conversation);
+  persist();
+  render();
 }
 
 function normalizedModelProvider(value) {

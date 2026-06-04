@@ -25,6 +25,7 @@ export function activeProfile(userDb) {
 export function createEmptyConversation(contentDb, profile) {
   const now = Date.now() / 1000;
   const id = `conversation-${crypto.randomUUID()}`;
+  const settings = defaultConversationSettings(profile);
   const conversation = {
     id,
     conversation_id: id,
@@ -32,11 +33,12 @@ export function createEmptyConversation(contentDb, profile) {
     create_time: now,
     update_time: now,
     current_node: null,
-    default_model_slug: profile.openai?.model || "gpt-4.1-mini",
+    default_model_slug: settings.model,
+    settings,
     mapping: {},
     metadata: {
       provider: "supabase-edge",
-      model_provider: profile.model_provider || "openai",
+      model_provider: settings.model_provider,
       adapter_version: "mobile-cache-mvp",
     },
     source: { kind: "created_in_mobile_cache_mvp" },
@@ -46,12 +48,33 @@ export function createEmptyConversation(contentDb, profile) {
   return conversation;
 }
 
-export function syncConversationSettings(conversation, profile) {
-  conversation.default_model_slug = profile.openai?.model || conversation.default_model_slug || "";
+export function conversationSettings(conversation, profile) {
+  const defaults = defaultConversationSettings(profile);
+  const stored = conversation?.settings || {};
+  return {
+    model_provider: stored.model_provider || conversation?.metadata?.model_provider || defaults.model_provider,
+    model: stored.model || conversation?.default_model_slug || defaults.model,
+    vector_store_names: Array.isArray(stored.vector_store_names) ? stored.vector_store_names : defaults.vector_store_names,
+    system_prompt: typeof stored.system_prompt === "string" ? stored.system_prompt : defaults.system_prompt,
+    system_prompt_preset_id: stored.system_prompt_preset_id || "",
+    system_prompt_preset_name: stored.system_prompt_preset_name || "",
+  };
+}
+
+export function syncConversationSettings(conversation, settings) {
+  conversation.settings = {
+    model_provider: settings.model_provider || "openai",
+    model: settings.model || "",
+    vector_store_names: Array.isArray(settings.vector_store_names) ? settings.vector_store_names : [],
+    system_prompt: settings.system_prompt || "",
+    system_prompt_preset_id: settings.system_prompt_preset_id || "",
+    system_prompt_preset_name: settings.system_prompt_preset_name || "",
+  };
+  conversation.default_model_slug = conversation.settings.model;
   conversation.metadata ||= {};
   conversation.metadata.provider = "supabase-edge";
-  conversation.metadata.model_provider = profile.model_provider || "openai";
-  conversation.metadata.system_prompt_name = profile.script?.name || "";
+  conversation.metadata.model_provider = conversation.settings.model_provider;
+  conversation.metadata.system_prompt_name = conversation.settings.system_prompt_preset_name;
 }
 
 export function titleFromInput(text) {
@@ -168,12 +191,27 @@ function conversationIndexRecord(conversation) {
     current_node: conversation.current_node,
     default_model_slug: conversation.default_model_slug,
     model_provider: conversation.metadata?.model_provider || "",
+    system_prompt_name: conversation.settings?.system_prompt_preset_name || "",
+    vector_store_names: conversation.settings?.vector_store_names || [],
     message_count: Object.values(conversation.mapping || {}).filter((node) => node.message).length,
     preview_text: preview,
     is_archived: conversation.is_archived ?? null,
     is_starred: conversation.is_starred ?? null,
     source_kind: conversation.source?.kind,
     has_unsupported_content: hasUnsupportedContent(conversation),
+  };
+}
+
+function defaultConversationSettings(profile) {
+  const openai = profile.openai || {};
+  const activeAlias = openai.active_vector_store_alias || "";
+  return {
+    model_provider: profile.model_provider || "openai",
+    model: openai.model || "gpt-4.1-mini",
+    vector_store_names: activeAlias ? [activeAlias] : [],
+    system_prompt: profile.script?.system_prompt || "",
+    system_prompt_preset_id: "",
+    system_prompt_preset_name: profile.script?.name || "",
   };
 }
 
