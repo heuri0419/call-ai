@@ -43,7 +43,7 @@
 
       <section class="conversation-head">
         <p class="eyebrow">local conversation</p>
-        <p id="statusLine">idle</p>
+        <p id="statusLine"><span class="status-spinner" aria-hidden="true"></span><span id="statusText">idle</span></p>
       </section>
 
       <section id="messageStack" class="message-stack" aria-label="messages"></section>
@@ -98,6 +98,23 @@
             <label>
               <span>Vector store aliases</span>
               <input id="vectorStoreAliasesInput" type="text" autocomplete="off" placeholder="Optional, comma separated aliases" />
+            </label>
+          </div>
+        </section>
+        <section class="settings-section">
+          <h3>Appearance</h3>
+          <div class="appearance-form">
+            <label>
+              <span>Font</span>
+              <select id="fontFamilySelect">
+                <option value="system">System</option>
+                <option value="serif">Serif</option>
+                <option value="mono">Mono</option>
+              </select>
+            </label>
+            <label>
+              <span>Text size</span>
+              <input id="fontSizeInput" type="number" min="13" max="19" step="1" />
             </label>
           </div>
         </section>

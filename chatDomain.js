@@ -340,8 +340,17 @@ function createMessage(role, text, time, model) {
     weight: 1,
     channel: null,
     recipient: null,
-    metadata: model ? { model_slug: model, message_type: "next" } : { message_type: "next" },
+    metadata: {
+      ...(model ? { model_slug: model } : {}),
+      message_type: "next",
+      estimated_tokens: estimateTextTokens(text),
+    },
   };
+}
+
+export function estimateTextTokens(text) {
+  const normalized = String(text || "").trim();
+  return normalized ? Math.max(1, Math.ceil(normalized.length / 4)) : 0;
 }
 
 function latestDescendant(conversation, nodeId) {

@@ -1,4 +1,4 @@
-import { contentToText, conversationSettings, currentPath, promptVersions } from "./chatDomain.js";
+import { contentToText, conversationSettings, currentPath, estimateTextTokens, promptVersions } from "./chatDomain.js";
 
 export function getElements() {
   return {
@@ -32,6 +32,8 @@ export function getElements() {
     modelFilterSelect: document.querySelector("#modelFilterSelect"),
     loadModelsButton: document.querySelector("#loadModelsButton"),
     vectorStoreAliasesInput: document.querySelector("#vectorStoreAliasesInput"),
+    fontFamilySelect: document.querySelector("#fontFamilySelect"),
+    fontSizeInput: document.querySelector("#fontSizeInput"),
     activeVectorStoreSelect: document.querySelector("#activeVectorStoreSelect"),
     systemPromptInput: document.querySelector("#systemPromptInput"),
     systemPromptPresetSelect: document.querySelector("#systemPromptPresetSelect"),
@@ -44,6 +46,7 @@ export function getElements() {
     profileStatus: document.querySelector("#profileStatus"),
     conversationTitle: document.querySelector("#conversationTitle"),
     statusLine: document.querySelector("#statusLine"),
+    statusText: document.querySelector("#statusText"),
     messageStack: document.querySelector("#messageStack"),
     runForm: document.querySelector("#runForm"),
     inputBox: document.querySelector("#inputBox"),
@@ -71,6 +74,7 @@ export function renderApp(
 ) {
   const supabase = profile.supabase || {};
   const openai = profile.openai || {};
+  applyAppearance(profile.appearance || {});
   const settings = conversationSettings(conversation, profile);
   const modelProvider = settings.model_provider;
   els.appShell.classList.toggle("sidebar-closed", !isSidebarOpen);
@@ -87,6 +91,8 @@ export function renderApp(
   ].join(" / ");
 
   els.supabaseUrlInput.value = supabase.url || "";
+  els.fontFamilySelect.value = validFontFamily(profile.appearance?.font_family);
+  els.fontSizeInput.value = String(validFontSize(profile.appearance?.font_size));
   els.modelProviderSelect.value = modelProvider;
   els.modelInput.value = settings.model || "";
   renderVectorStoreSelect(els, openai, settings.vector_store_names[0] || "");
@@ -224,7 +230,13 @@ export function renderMessages(els, conversation, handlers) {
 }
 
 export function setStatus(els, message) {
-  els.statusLine.textContent = message;
+  els.statusText.textContent = message;
+  els.statusLine.dataset.state = message && message !== "ready" ? "active" : "idle";
+  els.statusLine.dataset.busy = isBusyStatus(message) ? "true" : "false";
+}
+
+function isBusyStatus(message) {
+  return /\b(loading|saving|calling|syncing|reading|requesting|refreshing|regenerating)\b/i.test(String(message || ""));
 }
 
 export function openPromptEditor(els, text) {
@@ -240,6 +252,9 @@ export function openPromptEditor(els, text) {
 
 function renderMessage(conversation, node, handlers) {
   const role = node.message.author?.role || "unknown";
+  const row = document.createElement("div");
+  row.className = `message-row ${role}`;
+
   const article = document.createElement("article");
   article.className = `message ${role}`;
 
@@ -253,7 +268,18 @@ function renderMessage(conversation, node, handlers) {
 
   article.append(meta, text);
   if (role === "user") article.append(renderPromptToolbar(conversation, node, handlers));
-  return article;
+  if (role === "assistant") article.append(renderTokenNote(node));
+  row.append(article);
+  return row;
+}
+
+function renderTokenNote(node) {
+  const note = document.createElement("span");
+  note.className = "token-note";
+  const text = contentToText(node.message.content);
+  const tokens = Number(node.message.metadata?.tokens || node.message.metadata?.estimated_tokens) || estimateTextTokens(text);
+  note.textContent = `~${tokens} tok`;
+  return note;
 }
 
 function renderPromptToolbar(conversation, node, handlers) {
@@ -290,4 +316,25 @@ function iconButton(label, title) {
   button.textContent = label;
   button.title = title;
   return button;
+}
+
+function applyAppearance(appearance) {
+  document.documentElement.style.setProperty("--font-family", fontStack(validFontFamily(appearance.font_family)));
+  document.documentElement.style.setProperty("--app-font-size", `${validFontSize(appearance.font_size)}px`);
+}
+
+function validFontFamily(value) {
+  return ["system", "serif", "mono"].includes(value) ? value : "system";
+}
+
+function validFontSize(value) {
+  const size = Number(value);
+  if (!Number.isFinite(size)) return 15;
+  return Math.min(19, Math.max(13, Math.round(size)));
+}
+
+function fontStack(value) {
+  if (value === "serif") return 'Georgia, "Times New Roman", serif';
+  if (value === "mono") return '"Cascadia Mono", "SFMono-Regular", Consolas, monospace';
+  return 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 }

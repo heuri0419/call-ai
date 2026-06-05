@@ -8,6 +8,8 @@
   --accent: #0f766e;
   --accent-soft: #e4f3ef;
   --shadow: 0 10px 24px rgba(30, 39, 34, 0.08);
+  --font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --app-font-size: 15px;
 }
 
 * {
@@ -19,7 +21,8 @@ body {
   min-height: 100vh;
   background: var(--bg);
   color: var(--ink);
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-family);
+  font-size: var(--app-font-size);
 }
 
 button,
@@ -54,6 +57,12 @@ textarea {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
   align-items: end;
+}
+
+.appearance-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px;
+  gap: 10px;
 }
 
 .model-picker button,
@@ -264,11 +273,51 @@ h2 {
 }
 
 #providerLine,
-#statusLine,
 #profileStatus,
 .eyebrow {
   color: var(--muted);
   font-size: 13px;
+}
+
+#statusLine {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 1200;
+  max-width: min(440px, calc(100vw - 24px));
+  border: 1px solid rgba(15, 118, 110, 0.22);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.35;
+  padding: 8px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+}
+
+.status-spinner {
+  display: none;
+  width: 13px;
+  height: 13px;
+  border: 2px solid rgba(15, 118, 110, 0.18);
+  border-top-color: var(--accent);
+  border-radius: 999px;
+}
+
+#statusLine[data-busy="true"] .status-spinner {
+  display: inline-block;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .top-actions,
@@ -378,7 +427,22 @@ textarea {
   padding: 14px;
 }
 
+.message-row {
+  position: relative;
+  display: flex;
+  width: 100%;
+}
+
+.message-row.assistant {
+  justify-content: flex-start;
+}
+
+.message-row.user {
+  justify-content: flex-end;
+}
+
 .message {
+  position: relative;
   align-self: flex-start;
   width: fit-content;
   max-width: min(82%, 720px);
@@ -391,6 +455,17 @@ textarea {
 .message.user {
   align-self: flex-end;
   background: var(--accent-soft);
+}
+
+.token-note {
+  position: absolute;
+  right: 0;
+  bottom: 1px;
+  transform: translateX(calc(100% + 6px));
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .message.user .message-meta {
@@ -534,18 +609,20 @@ dialog::backdrop {
 
   .conversation-sidebar {
     min-height: auto;
-    max-height: 42vh;
+    max-height: 48vh;
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
 
   .topbar {
-    align-items: flex-start;
+    display: grid;
+    align-items: start;
   }
 
   .top-actions {
+    width: 100%;
     flex-wrap: wrap;
-    justify-content: flex-end;
+    justify-content: flex-start;
   }
 
   #exportButton,
@@ -562,7 +639,19 @@ dialog::backdrop {
   }
 
   .message {
-    max-width: 92%;
+    max-width: min(88%, 620px);
+  }
+
+  .message-row.assistant .message {
+    max-width: calc(100% - 58px);
+  }
+
+  .message-row.assistant .token-note {
+    transform: translateX(calc(100% + 5px));
+  }
+
+  .message-text {
+    font-size: var(--app-font-size);
   }
 
   #runButton {
@@ -580,5 +669,30 @@ dialog::backdrop {
 
   .auth-login {
     grid-template-columns: 1fr;
+  }
+
+  .local-import,
+  .appearance-form {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-dialog {
+    width: 100vw;
+    max-height: 100dvh;
+  }
+
+  .dialog-visible[open] {
+    inset: 0;
+    transform: none;
+  }
+
+  .settings-form {
+    max-height: 100dvh;
+  }
+
+  #statusLine {
+    top: 8px;
+    right: 8px;
+    max-width: calc(100vw - 16px);
   }
 }

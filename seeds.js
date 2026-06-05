@@ -25,6 +25,10 @@ export const seedUserDb = {
         vector_store_aliases: [],
         active_vector_store_alias: "",
       },
+      appearance: {
+        font_family: "system",
+        font_size: 15,
+      },
       script: {
         id: "mobile-context-reply",
         name: "Mobile context reply",

@@ -104,6 +104,8 @@ function persistSession() {
     active_conversation_id: activeConversationId || "",
     is_sidebar_open: isSidebarOpen,
     supabase_jwt: profile.supabase?.jwt || "",
+    supabase_refresh_token: session.supabase_refresh_token || "",
+    supabase_expires_at: session.supabase_expires_at || 0,
   });
 }
 
@@ -113,7 +115,7 @@ function handleEditPrompt(nodeId) {
   openPromptEditor(els, contentToText(conversation.mapping[nodeId].message.content));
 }
 
-function savePromptVersion() {
+async function savePromptVersion() {
   const conversation = activeConversation();
   if (!conversation) return;
   const node = createPromptVersion(conversation, editingNodeId, els.editPromptInput.value);
@@ -122,7 +124,8 @@ function savePromptVersion() {
   persist();
   closeDialog(els.editDialog);
   render();
-  setStatus(els, "prompt version saved");
+  setStatus(els, "prompt version saved; regenerating reply");
+  await generateReplyForCurrentPrompt(contentToText(node.message.content));
 }
 
 function handleSwitchPromptVersion(nodeId) {
@@ -155,10 +158,21 @@ async function runScript(event) {
   persist();
   render();
 
+  await generateReplyForCurrentPrompt(input, { clearInput: true });
+}
+
+async function generateReplyForCurrentPrompt(input, { clearInput = false } = {}) {
+  const profile = activeProfile(userDb);
+  const settings = settingsFromForm(profile);
+  let conversation = activeConversation();
+  if (!conversation) return setStatus(els, "no active conversation");
+
   els.runButton.disabled = true;
+  els.saveEditButton.disabled = true;
   try {
+    await refreshSupabaseJwtIfNeeded(profile);
     const provider = createProviderClient(profile);
-    if (supabase.jwt) {
+    if (profile.supabase?.jwt) {
       setStatus(els, "saving prompt to cloud before model call");
       const promptSync = await syncConversationSnapshot(provider, conversation);
       persist();
@@ -184,12 +198,12 @@ async function runScript(event) {
     touchContentDb(contentDb, conversation);
     persist();
 
-    if (supabase.jwt) {
+    if (profile.supabase?.jwt) {
       setStatus(els, "saving reply to cloud");
       const replySync = await syncConversationSnapshot(provider, conversation);
       persist();
       render();
-      els.inputBox.value = "";
+      if (clearInput) els.inputBox.value = "";
       if (!replySync.ok) {
         setStatus(els, "reply saved locally, cloud sync failed");
         return;
@@ -198,13 +212,14 @@ async function runScript(event) {
       return;
     }
 
-    els.inputBox.value = "";
+    if (clearInput) els.inputBox.value = "";
     render();
     setStatus(els, "reply saved");
   } catch (error) {
     setStatus(els, `call failed: ${error.message}`);
   } finally {
     els.runButton.disabled = false;
+    els.saveEditButton.disabled = false;
   }
 }
 
@@ -218,6 +233,7 @@ async function loadModelChoices() {
   els.loadModelsButton.disabled = true;
   setStatus(els, `loading ${modelProvider} models`);
   try {
+    await refreshSupabaseJwtIfNeeded(profile);
     const provider = createProviderClient(profile);
     loadedModels = await provider.listModels({ provider: modelProvider });
     refreshModelChoices();
@@ -259,6 +275,7 @@ async function loadSystemPromptPresets() {
   els.loadPresetsButton.disabled = true;
   setStatus(els, "loading system prompt presets");
   try {
+    await refreshSupabaseJwtIfNeeded(profile);
     loadedPresets = await createProviderClient(profile).listSystemPromptPresets();
     const selectedId = conversationSettings(activeConversation(), profile).system_prompt_preset_id;
     renderPresetChoices(els, loadedPresets, selectedId);
@@ -280,6 +297,7 @@ async function saveSystemPromptPreset() {
   els.savePresetButton.disabled = true;
   setStatus(els, "saving system prompt preset");
   try {
+    await refreshSupabaseJwtIfNeeded(profile);
     const created = await createProviderClient(profile).createSystemPromptPreset({
       name,
       content,
@@ -373,6 +391,7 @@ async function syncCloudConversations() {
   els.syncConversationsButton.disabled = true;
   setStatus(els, "syncing conversations");
   try {
+    await refreshSupabaseJwtIfNeeded(profile);
     const provider = createProviderClient(profile);
     const remoteRows = await provider.listCloudConversations();
     const remoteById = new Map(remoteRows.map((row) => [row.conversation_id, row]));
@@ -487,10 +506,23 @@ function saveProfile(event) {
 
   const anonKey = els.supabaseAnonKeyInput.value.trim();
   const jwt = els.supabaseJwtInput.value.trim();
+  const previousUrl = profile.supabase.url || "";
+  const previousAnonKey = profile.supabase.anon_key || "";
   profile.supabase.url = els.supabaseUrlInput.value.trim();
   if (anonKey) profile.supabase.anon_key = anonKey;
-  if (jwt) profile.supabase.jwt = jwt;
+  if (profile.supabase.url !== previousUrl || profile.supabase.anon_key !== previousAnonKey) {
+    session.supabase_refresh_token = "";
+    session.supabase_expires_at = 0;
+  }
+  if (jwt) {
+    profile.supabase.jwt = jwt;
+    session.supabase_expires_at = 0;
+  }
   profile.model_provider = normalizedModelProvider(els.modelProviderSelect.value);
+  profile.appearance = {
+    font_family: normalizedFontFamily(els.fontFamilySelect.value),
+    font_size: normalizedFontSize(els.fontSizeInput.value),
+  };
   profile.openai.model = els.modelInput.value.trim();
   profile.openai.vector_store_aliases = parseVectorStoreAliases(els.vectorStoreAliasesInput.value);
   profile.openai.active_vector_store_alias = profile.openai.vector_store_aliases.includes(els.activeVectorStoreSelect.value)
@@ -537,6 +569,8 @@ async function loginWithSupabasePassword() {
     profile.supabase.url = supabaseUrl;
     profile.supabase.anon_key = anonKey;
     profile.supabase.jwt = authSession.access_token;
+    session.supabase_refresh_token = authSession.refresh_token || "";
+    session.supabase_expires_at = authExpiresAt(authSession);
     userDb.updated_at = new Date().toISOString();
     persist();
 
@@ -572,6 +606,60 @@ async function requestSupabasePasswordSession({ supabaseUrl, anonKey, email, pas
     throw new Error(message);
   }
   return data;
+}
+
+async function refreshSupabaseJwtIfNeeded(profile, { force = false } = {}) {
+  profile.supabase ||= {};
+  if (!profile.supabase.url || !profile.supabase.anon_key || !session.supabase_refresh_token) return false;
+
+  const expiresAt = Number(session.supabase_expires_at) || 0;
+  const shouldRefresh = force
+    || !profile.supabase.jwt
+    || (expiresAt && expiresAt < Math.floor(Date.now() / 1000) + 120);
+  if (!shouldRefresh) return false;
+
+  setStatus(els, "refreshing Supabase JWT");
+  const authSession = await requestSupabaseRefreshSession({
+    supabaseUrl: profile.supabase.url,
+    anonKey: profile.supabase.anon_key,
+    refreshToken: session.supabase_refresh_token,
+  });
+  if (!authSession.access_token) throw new Error("Supabase did not return a refreshed access token.");
+
+  profile.supabase.jwt = authSession.access_token;
+  session.supabase_refresh_token = authSession.refresh_token || session.supabase_refresh_token;
+  session.supabase_expires_at = authExpiresAt(authSession);
+  userDb.updated_at = new Date().toISOString();
+  persist();
+  return true;
+}
+
+async function requestSupabaseRefreshSession({ supabaseUrl, anonKey, refreshToken }) {
+  const baseUrl = supabaseUrl.replace(/\/+$/, "");
+  const response = await fetch(`${baseUrl}/auth/v1/token?grant_type=refresh_token`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${anonKey}`,
+      apikey: anonKey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.error) {
+    const message = typeof data.error === "string"
+      ? data.error
+      : data.error_description || data.msg || data.message || `HTTP ${response.status}`;
+    throw new Error(message);
+  }
+  return data;
+}
+
+function authExpiresAt(authSession) {
+  if (Number(authSession.expires_at)) return Number(authSession.expires_at);
+  const expiresIn = Number(authSession.expires_in) || 3600;
+  return Math.floor(Date.now() / 1000) + expiresIn;
 }
 
 function refreshVectorStoreChoices() {
@@ -640,6 +728,16 @@ function parseVectorStoreAliases(value) {
     .split(/[\n,]+/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function normalizedFontFamily(value) {
+  return ["system", "serif", "mono"].includes(value) ? value : "system";
+}
+
+function normalizedFontSize(value) {
+  const size = Number(value);
+  if (!Number.isFinite(size)) return 15;
+  return Math.min(19, Math.max(13, Math.round(size)));
 }
 
 function openDialog(dialog) {
