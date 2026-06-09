@@ -147,23 +147,30 @@ async function callSupabaseRest({ supabaseUrl, anonKey, jwt, path, method = "GET
 }
 
 function normalizeModels(models, provider) {
-  return models.map((model) => {
-    const id = String(model.id || "");
-    const category = provider === "grok" ? classifyGrokModel(id) : classifyOpenAiModel(id);
-    return {
-      id,
-      owned_by: String(model.owned_by || ""),
-      provider,
-      category,
-      is_fine_tuned: id.startsWith("ft:"),
-      is_text_candidate: category === "text" || category === "fine-tuned",
-    };
-  });
+  return models
+    .map((model) => {
+      const id = String(model.id || "");
+      const category = provider === "grok" ? classifyGrokModel(id) : classifyOpenAiModel(id);
+      return {
+        id,
+        owned_by: String(model.owned_by || ""),
+        provider,
+        category,
+        is_fine_tuned: id.startsWith("ft:"),
+        is_text_candidate: category === "text" || category === "fine-tuned",
+      };
+    })
+    .filter((model) => model.id && isCompatibleChatModel(model));
+}
+
+function isCompatibleChatModel(model) {
+  if (model.provider === "grok") return model.category === "text";
+  return model.category === "text" || model.category === "fine-tuned";
 }
 
 function classifyGrokModel(id) {
-  if (/(imagine|image-generation|video|voice|tts|speech)/i.test(id)) return "media";
-  if (/grok/i.test(id)) return "text";
+  if (/(imagine|image-generation|image|video|voice|tts|speech|embed)/i.test(id)) return "media";
+  if (/^grok/i.test(id)) return "text";
   return "other";
 }
 
@@ -174,6 +181,6 @@ function classifyOpenAiModel(id) {
   if (/(audio|tts|whisper|transcribe|realtime)/i.test(id)) return "audio";
   if (/^(babbage|davinci)-002$/i.test(id)) return "legacy";
   if (/search-preview|search-api/i.test(id)) return "search";
-  if (/^(gpt|o\d|chat-latest)/i.test(id)) return "text";
+  if (/^(gpt|o\d|chatgpt|chat-latest)/i.test(id)) return "text";
   return "other";
 }

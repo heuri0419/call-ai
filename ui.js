@@ -1,4 +1,5 @@
 import { contentToText, conversationSettings, currentPath, estimateTextTokens, promptVersions } from "./chatDomain.js";
+import { renderMarkdownInto } from "./markdownRenderer.js";
 
 export function getElements() {
   return {
@@ -45,6 +46,14 @@ export function getElements() {
     closeChatSettingsButton: document.querySelector("#closeChatSettingsButton"),
     profileStatus: document.querySelector("#profileStatus"),
     conversationTitle: document.querySelector("#conversationTitle"),
+    floatingTopbar: document.querySelector("#floatingTopbar"),
+    floatingConversationTitle: document.querySelector("#floatingConversationTitle"),
+    floatingProviderLine: document.querySelector("#floatingProviderLine"),
+    floatingChatSettingsButton: document.querySelector("#floatingChatSettingsButton"),
+    floatingSettingsButton: document.querySelector("#floatingSettingsButton"),
+    scrollRail: document.querySelector("#scrollRail"),
+    scrollTopButton: document.querySelector("#scrollTopButton"),
+    scrollBottomButton: document.querySelector("#scrollBottomButton"),
     statusLine: document.querySelector("#statusLine"),
     statusText: document.querySelector("#statusText"),
     messageStack: document.querySelector("#messageStack"),
@@ -101,6 +110,8 @@ export function renderApp(
   els.systemPromptPresetNameInput.value = settings.system_prompt_preset_name || "";
   renderPresetChoices(els, presets, settings.system_prompt_preset_id);
   els.conversationTitle.textContent = conversation?.title || "Empty content database";
+  els.floatingConversationTitle.textContent = conversation?.title || "Empty content database";
+  els.floatingProviderLine.textContent = els.providerLine.textContent;
   renderConversationList(els, conversations, activeConversationId, { onSelectConversation, onNewConversation });
   renderMessages(els, conversation, { onEditPrompt, onSwitchPromptVersion });
 }
@@ -199,8 +210,7 @@ export function vectorStoreAliases(openai) {
 export function activeVectorStoreAlias(openai) {
   if (typeof openai.active_vector_store_alias === "string") return openai.active_vector_store_alias.trim();
   if (typeof openai.active_vector_store_name === "string") return openai.active_vector_store_name.trim();
-  const aliases = vectorStoreAliases(openai);
-  return aliases.length === 1 ? aliases[0] : "";
+  return "";
 }
 
 function renderVectorStoreSelect(els, openai, activeOverride = "") {
@@ -264,7 +274,7 @@ function renderMessage(conversation, node, handlers) {
 
   const text = document.createElement("div");
   text.className = "message-text";
-  text.textContent = contentToText(node.message.content);
+  renderMarkdownInto(text, contentToText(node.message.content));
 
   article.append(meta, text);
   if (role === "user") article.append(renderPromptToolbar(conversation, node, handlers));

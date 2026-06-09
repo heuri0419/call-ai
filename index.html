@@ -46,6 +46,20 @@
         <p id="statusLine"><span class="status-spinner" aria-hidden="true"></span><span id="statusText">idle</span></p>
       </section>
 
+      <div id="floatingTopbar" class="floating-topbar" aria-hidden="true">
+        <div class="floating-topbar-title">
+          <strong id="floatingConversationTitle">New conversation</strong>
+          <span id="floatingProviderLine">Supabase Edge Function</span>
+        </div>
+        <button id="floatingChatSettingsButton" type="button">Chat settings</button>
+        <button id="floatingSettingsButton" type="button">Settings</button>
+      </div>
+
+      <nav id="scrollRail" class="scroll-rail" aria-label="Message scroll shortcuts">
+        <button id="scrollTopButton" type="button" title="Go to top" aria-label="Go to top">^</button>
+        <button id="scrollBottomButton" type="button" title="Go to bottom" aria-label="Go to bottom">v</button>
+      </nav>
+
       <section id="messageStack" class="message-stack" aria-label="messages"></section>
 
       <form id="runForm" class="composer">

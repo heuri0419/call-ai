@@ -32,6 +32,8 @@ let editingNodeId = null;
 let loadedModels = [];
 let loadedPresets = [];
 let isSidebarOpen = session.is_sidebar_open !== false;
+let lastMessageScrollTop = 0;
+let floatingHeaderVisible = false;
 
 const initialProfile = activeProfile(userDb);
 initialProfile.supabase ||= {};
@@ -47,8 +49,10 @@ els.syncConversationsButton.addEventListener("click", syncCloudConversations);
 els.newConversationButton.addEventListener("click", createConversationFromButton);
 els.settingsButton.addEventListener("click", openSettings);
 els.compactSettingsButton.addEventListener("click", openSettings);
+els.floatingSettingsButton.addEventListener("click", openSettings);
 els.closeSettingsButton.addEventListener("click", () => closeDialog(els.settingsDialog));
 els.chatSettingsButton.addEventListener("click", openChatSettings);
+els.floatingChatSettingsButton.addEventListener("click", openChatSettings);
 els.closeChatSettingsButton.addEventListener("click", () => closeDialog(els.chatSettingsDialog));
 els.chatSettingsForm.addEventListener("submit", saveChatSettings);
 els.profileForm.addEventListener("submit", saveProfile);
@@ -69,6 +73,10 @@ els.exportButton.addEventListener("click", () => {
 });
 els.resetButton.addEventListener("click", resetLocalDatabases);
 els.saveEditButton.addEventListener("click", savePromptVersion);
+els.messageStack.addEventListener("scroll", handleMessageScroll, { passive: true });
+els.scrollTopButton.addEventListener("click", () => scrollMessagesTo("top"));
+els.scrollBottomButton.addEventListener("click", () => scrollMessagesTo("bottom"));
+window.addEventListener("resize", updateFloatingLayout, { passive: true });
 
 persist();
 render();
@@ -87,6 +95,45 @@ function render() {
     onEditPrompt: handleEditPrompt,
     onSwitchPromptVersion: handleSwitchPromptVersion,
   });
+  updateFloatingLayout();
+  updateScrollChrome();
+}
+
+function handleMessageScroll() {
+  const currentTop = els.messageStack.scrollTop;
+  const direction = currentTop < lastMessageScrollTop ? "up" : currentTop > lastMessageScrollTop ? "down" : "still";
+  lastMessageScrollTop = currentTop;
+  updateScrollChrome(direction);
+}
+
+function scrollMessagesTo(target) {
+  const top = target === "top" ? 0 : els.messageStack.scrollHeight;
+  els.messageStack.scrollTo({ top, behavior: "smooth" });
+  floatingHeaderVisible = target === "top" ? false : floatingHeaderVisible;
+  updateScrollChrome();
+}
+
+function updateFloatingLayout() {
+  document.documentElement.style.setProperty("--composer-height", `${Math.ceil(els.runForm.offsetHeight || 96)}px`);
+  document.documentElement.style.setProperty("--status-height", `${Math.ceil(els.statusLine.offsetHeight || 40)}px`);
+}
+
+function updateScrollChrome(direction = "still") {
+  const maxScroll = Math.max(0, els.messageStack.scrollHeight - els.messageStack.clientHeight);
+  const currentTop = els.messageStack.scrollTop;
+  const canScroll = maxScroll > 12;
+  const nearTop = currentTop <= 10;
+  const nearBottom = currentTop >= maxScroll - 10;
+
+  els.scrollRail.dataset.visible = canScroll ? "true" : "false";
+  els.scrollTopButton.disabled = !canScroll || nearTop;
+  els.scrollBottomButton.disabled = !canScroll || nearBottom;
+
+  if (!canScroll || nearTop || direction === "down") floatingHeaderVisible = false;
+  if (canScroll && currentTop > 96 && direction === "up") floatingHeaderVisible = true;
+
+  els.floatingTopbar.dataset.visible = floatingHeaderVisible ? "true" : "false";
+  els.floatingTopbar.setAttribute("aria-hidden", floatingHeaderVisible ? "false" : "true");
 }
 
 function activeConversation() {
